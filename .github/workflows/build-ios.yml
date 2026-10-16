@@ -1,0 +1,49 @@
+YAML
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: CalendarWidgetApp  # Points inside your uploaded folder
+
+    steps:
+      - name: Checkout your Swift code
+        uses: actions/checkout@v4
+
+      - name: Generate Xcode Project via XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Compile Swift Code for iOS
+        run: |
+          # Automatically detects the .xcodeproj created from your project.yml
+          PROJ=$(ls -d *.xcodeproj | head -n 1)
+          SCHEME="${PROJ%.xcodeproj}"
+          xcodebuild -project "$PROJ" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package into an .ipa file
+        run: |
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/*.app Payload/
+          zip -r CompiledApp.ipa Payload
+
+      - name: Upload .ipa for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compiled-iOS-App
+          path: CalendarWidgetApp/CompiledApp.ipa
