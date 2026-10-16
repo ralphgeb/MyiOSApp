@@ -1,48 +1,103 @@
-name: Build iOS IPA
+name: Build and Upload to TestFlight
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-upload:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: CalendarWidgetApp  # Points inside your uploaded folder
+        working-directory: CalendarWidgetApp
 
     steps:
-      - name: Checkout your Swift code
+      - name: Checkout Swift code
         uses: actions/checkout@v4
 
-      - name: Generate Xcode Project via XcodeGen
+      - name: Install Apple Certificate and Provisioning Profile
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_P12_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
         run: |
-          brew install xcodegen
+          # Create temporary directory for keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app_signing.keychain-db
+          
+          # Create keychain
+          security create-keychain -p "" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Install Provisioning Profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+
+      - name: Generate Xcode Project
+        run: |
+          if ! command -v xcodegen &> /dev/null; then
+            brew install xcodegen
+          fi
           xcodegen generate
 
-      - name: Compile Swift Code for iOS
+      - name: Build and Archive App
         run: |
-          # Automatically detects the .xcodeproj created from your project.yml
           PROJ=$(ls -d *.xcodeproj | head -n 1)
           SCHEME="${PROJ%.xcodeproj}"
-          xcodebuild -project "$PROJ" \
+          
+          xcodebuild archive \
+            -project "$PROJ" \
             -scheme "$SCHEME" \
-            -configuration Release \
+            -archivePath build/App.xcarchive \
             -sdk iphoneos \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            -configuration Release \
+            CODE_SIGN_STYLE="Manual" \
+            PROVISIONING_PROFILE_SPECIFIER=""
 
-      - name: Package into an .ipa file
+      - name: Export IPA
         run: |
-          mkdir -p Payload
-          cp -r build/Build/Products/Release-iphoneos/*.app Payload/
-          zip -r CompiledApp.ipa Payload
+          # Create a minimal export options plist
+          cat <<EOF > ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>uploadSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
 
-      - name: Upload .ipa for download
-        uses: actions/upload-artifact@v4
-        with:
-          name: Compiled-iOS-App
-          path: CalendarWidgetApp/CompiledApp.ipa
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/exported \
+            -exportOptionsPlist ExportOptions.plist
+
+      - name: Upload to App Store Connect / TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          # Save private key to file
+          mkdir -p ~/.private_keys
+          echo "$ASC_PRIVATE_KEY" > ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+          # Upload IPA using xcrun altool
+          IPA_FILE=$(ls build/exported/*.ipa)
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA_FILE" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
