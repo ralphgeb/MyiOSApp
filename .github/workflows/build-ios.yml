@@ -40,6 +40,7 @@ jobs:
 
       - name: Archive (Xcode creates and signs with Apple-managed certificates)
         run: |
+          mkdir -p build
           set -o pipefail
           xcodebuild archive \
             -project CalendarWidgetApp.xcodeproj \
@@ -53,7 +54,20 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Automatic \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            2>&1 | tee build/archive.log || {
+              # Show the real reasons as red annotations at the top of the run page
+              grep -E "error:|ARCHIVE FAILED|No profiles|requires a provisioning|Provisioning profile|No Accounts|not registered" build/archive.log \
+                | sed 's/%/%25/g' | sort -u | head -15 | while IFS= read -r line; do echo "::error::${line}"; done
+              exit 1
+            }
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: CalendarWidgetApp/build/*.log
 
       - name: Export and upload to TestFlight
         run: |
