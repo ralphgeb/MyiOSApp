@@ -23,11 +23,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check the secrets are set
+      - name: Check the secrets are set and look right
         run: |
+          bad=0
           for v in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY APPLE_TEAM_ID; do
-            if [ -z "${!v}" ]; then echo "::error::Missing GitHub secret $v"; exit 1; fi
+            if [ -z "${!v}" ]; then echo "::error::Missing GitHub secret $v"; bad=1; fi
           done
+          trim() { printf %s "$1" | tr -d '[:space:]'; }
+          team=$(trim "$APPLE_TEAM_ID"); key=$(trim "$ASC_KEY_ID"); iss=$(trim "$ASC_ISSUER_ID")
+          [ "${#APPLE_TEAM_ID}" != "${#team}" ] && echo "::error::APPLE_TEAM_ID contains spaces or a line break (length ${#APPLE_TEAM_ID}, should be 10)" && bad=1
+          [ "${#ASC_KEY_ID}" != "${#key}" ] && echo "::error::ASC_KEY_ID contains spaces or a line break" && bad=1
+          [ "${#ASC_ISSUER_ID}" != "${#iss}" ] && echo "::error::ASC_ISSUER_ID contains spaces or a line break" && bad=1
+          [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error::APPLE_TEAM_ID should be 10 letters/digits, yours is ${#team} characters"; bad=1; }
+          [[ "$key" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error::ASC_KEY_ID should be 10 letters/digits, yours is ${#key} characters"; bad=1; }
+          [[ "$iss" =~ ^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$ ]] || { echo "::error::ASC_ISSUER_ID should look like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"; bad=1; }
+          echo "$ASC_PRIVATE_KEY" | grep -q "BEGIN PRIVATE KEY" || { echo "::error::ASC_PRIVATE_KEY must include the -----BEGIN PRIVATE KEY----- line"; bad=1; }
+          echo "$ASC_PRIVATE_KEY" | grep -q "END PRIVATE KEY" || { echo "::error::ASC_PRIVATE_KEY must include the -----END PRIVATE KEY----- line"; bad=1; }
+          [ "$(echo "$ASC_PRIVATE_KEY" | wc -l | tr -d ' ')" -lt 3 ] && echo "::error::ASC_PRIVATE_KEY is on one line; paste it exactly as in the .p8 file (several lines)" && bad=1
+          [ "$bad" = 0 ] || exit 1
+          echo "Secrets look well-formed."
 
       - name: Save the App Store Connect API key
         run: |
@@ -57,8 +71,8 @@ jobs:
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             2>&1 | tee build/archive.log || {
               # Show the real reasons as red annotations at the top of the run page
-              grep -E "error:|ARCHIVE FAILED|No profiles|requires a provisioning|Provisioning profile|No Accounts|not registered" build/archive.log \
-                | sed 's/%/%25/g' | sort -u | head -15 | while IFS= read -r line; do echo "::error::${line}"; done
+              grep -E -A2 "error:|ARCHIVE FAILED|No profiles|requires a provisioning|Provisioning profile|No Accounts|not registered" build/archive.log \
+                | grep -v '^--$' | sed 's/%/%25/g; s/Team "[A-Z0-9]*"/Team "(hidden)"/' | awk '!seen[$0]++' | head -25 | while IFS= read -r line; do echo "::error::${line}"; done
               exit 1
             }
 
