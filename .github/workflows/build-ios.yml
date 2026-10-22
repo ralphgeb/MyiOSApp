@@ -31,9 +31,9 @@ jobs:
           done
           trim() { printf %s "$1" | tr -d '[:space:]'; }
           team=$(trim "$APPLE_TEAM_ID"); key=$(trim "$ASC_KEY_ID"); iss=$(trim "$ASC_ISSUER_ID")
-          [ "${#APPLE_TEAM_ID}" != "${#team}" ] && echo "::error::APPLE_TEAM_ID contains spaces or a line break (length ${#APPLE_TEAM_ID}, should be 10)" && bad=1
-          [ "${#ASC_KEY_ID}" != "${#key}" ] && echo "::error::ASC_KEY_ID contains spaces or a line break" && bad=1
-          [ "${#ASC_ISSUER_ID}" != "${#iss}" ] && echo "::error::ASC_ISSUER_ID contains spaces or a line break" && bad=1
+          [ "${#APPLE_TEAM_ID}" != "${#team}" ] && echo "::warning::APPLE_TEAM_ID had stray spaces or a line break; ignoring them"
+          [ "${#ASC_KEY_ID}" != "${#key}" ] && echo "::warning::ASC_KEY_ID had stray spaces or a line break; ignoring them"
+          [ "${#ASC_ISSUER_ID}" != "${#iss}" ] && echo "::warning::ASC_ISSUER_ID had stray spaces or a line break; ignoring them"
           [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error::APPLE_TEAM_ID should be 10 letters/digits, yours is ${#team} characters"; bad=1; }
           [[ "$key" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error::ASC_KEY_ID should be 10 letters/digits, yours is ${#key} characters"; bad=1; }
           [[ "$iss" =~ ^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$ ]] || { echo "::error::ASC_ISSUER_ID should look like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"; bad=1; }
@@ -54,6 +54,9 @@ jobs:
 
       - name: Archive (Xcode creates and signs with Apple-managed certificates)
         run: |
+          APPLE_TEAM_ID=$(printf %s "$APPLE_TEAM_ID" | tr -d '[:space:]')
+          ASC_KEY_ID=$(printf %s "$ASC_KEY_ID" | tr -d '[:space:]')
+          ASC_ISSUER_ID=$(printf %s "$ASC_ISSUER_ID" | tr -d '[:space:]')
           mkdir -p build
           set -o pipefail
           xcodebuild archive \
@@ -85,6 +88,9 @@ jobs:
 
       - name: Export and upload to TestFlight
         run: |
+          APPLE_TEAM_ID=$(printf %s "$APPLE_TEAM_ID" | tr -d '[:space:]')
+          ASC_KEY_ID=$(printf %s "$ASC_KEY_ID" | tr -d '[:space:]')
+          ASC_ISSUER_ID=$(printf %s "$ASC_ISSUER_ID" | tr -d '[:space:]')
           set -o pipefail
           cat > ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
