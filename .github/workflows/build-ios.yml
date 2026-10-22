@@ -1,103 +1,81 @@
 name: Build and Upload to TestFlight
 
+# Manual for now: open the Actions tab, pick this workflow, press "Run workflow".
+# Once a run succeeds you can add a `push:` trigger for the main branch.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
-  build-and-upload:
+  testflight:
     runs-on: macos-latest
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: CalendarWidgetApp
 
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
     steps:
-      - name: Checkout Swift code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Apple Certificate and Provisioning Profile
-        env:
-          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_P12_PASSWORD }}
-          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+      - name: Check the secrets are set
         run: |
-          # Create temporary directory for keychain
-          KEYCHAIN_PATH=$RUNNER_TEMP/app_signing.keychain-db
-          
-          # Create keychain
-          security create-keychain -p "" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then echo "::error::Missing GitHub secret $v"; exit 1; fi
+          done
 
-          # Import certificate
-          echo "$CERTIFICATE_P12_BASE64" | base64 --decode > $RUNNER_TEMP/cert.p12
-          security import $RUNNER_TEMP/cert.p12 -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-
-          # Install Provisioning Profile
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
-
-      - name: Generate Xcode Project
+      - name: Save the App Store Connect API key
         run: |
-          if ! command -v xcodegen &> /dev/null; then
-            brew install xcodegen
-          fi
+          echo "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Generate Xcode project (XcodeGen)
+        run: |
+          brew install xcodegen
           xcodegen generate
 
-      - name: Build and Archive App
+      - name: Archive (Xcode creates and signs with Apple-managed certificates)
         run: |
-          PROJ=$(ls -d *.xcodeproj | head -n 1)
-          SCHEME="${PROJ%.xcodeproj}"
-          
+          set -o pipefail
           xcodebuild archive \
-            -project "$PROJ" \
-            -scheme "$SCHEME" \
-            -archivePath build/App.xcarchive \
-            -sdk iphoneos \
+            -project CalendarWidgetApp.xcodeproj \
+            -scheme CalendarWidgetApp \
             -configuration Release \
-            CODE_SIGN_STYLE="Manual" \
-            PROVISIONING_PROFILE_SPECIFIER=""
+            -destination 'generic/platform=iOS' \
+            -archivePath build/App.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
 
-      - name: Export IPA
+      - name: Export and upload to TestFlight
         run: |
-          # Create a minimal export options plist
-          cat <<EOF > ExportOptions.plist
+          set -o pipefail
+          cat > ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>uploadSymbols</key>
-              <true/>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
           </dict>
           </plist>
           EOF
-
           xcodebuild -exportArchive \
             -archivePath build/App.xcarchive \
-            -exportPath build/exported \
-            -exportOptionsPlist ExportOptions.plist
-
-      - name: Upload to App Store Connect / TestFlight
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
-        run: |
-          # Save private key to file
-          mkdir -p ~/.private_keys
-          echo "$ASC_PRIVATE_KEY" > ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
-
-          # Upload IPA using xcrun altool
-          IPA_FILE=$(ls build/exported/*.ipa)
-          xcrun altool --upload-app \
-            --type ios \
-            --file "$IPA_FILE" \
-            --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID"
+            -exportPath build/export \
+            -exportOptionsPlist ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"

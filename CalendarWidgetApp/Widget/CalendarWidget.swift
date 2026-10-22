@@ -37,7 +37,6 @@ struct CalendarEntry: TimelineEntry {
 
 struct Provider: TimelineProvider {
     private let store = EKEventStore()
-    private let daysAhead = 4
 
     func placeholder(in context: Context) -> CalendarEntry {
         CalendarEntry(date: .now, events: Self.sample, offset: 0)
@@ -72,12 +71,18 @@ struct Provider: TimelineProvider {
 
         let cal = Calendar.current
         let startOfToday = cal.startOfDay(for: .now)
-        guard let end = cal.date(byAdding: .day, value: daysAhead, to: startOfToday) else { return [] }
+        guard let end = cal.date(byAdding: .day, value: SharedSettings.daysAhead, to: startOfToday) else { return [] }
+
+        // Only the calendars the user left switched on in the app.
+        let hidden = SharedSettings.hiddenCalendarIDs
+        let selected = store.calendars(for: .event).filter { !hidden.contains($0.calendarIdentifier) }
+        guard !selected.isEmpty else { return [] }
 
         let predicate = store.predicateForEvents(withStart: .now.addingTimeInterval(-60 * 60 * 12),
-                                                 end: end, calendars: nil)
+                                                 end: end, calendars: selected)
         return store.events(matching: predicate)
             .filter { $0.endDate > startOfToday }
+            .filter { SharedSettings.showAllDay || !$0.isAllDay }
             .sorted { $0.startDate < $1.startDate }
             .map { CalEvent(id: $0.eventIdentifier ?? UUID().uuidString,
                             title: $0.title ?? "Untitled",
@@ -165,7 +170,7 @@ struct CalendarWidgetView: View {
         HStack(alignment: .top, spacing: 6) {
             VStack(alignment: .leading, spacing: 3) {
                 if entry.events.isEmpty {
-                    Text("No events in the next 4 days")
+                    Text("No events to show")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 } else {
@@ -269,7 +274,7 @@ struct CalendarListWidget: Widget {
             CalendarWidgetView(entry: entry)
         }
         .configurationDisplayName("Upcoming Events")
-        .description("Your next 4 days of events. Current event shows in orange.")
+        .description("Your upcoming events. Current event shows in orange.")
         .supportedFamilies([.systemMedium, .systemLarge])
     }
 }

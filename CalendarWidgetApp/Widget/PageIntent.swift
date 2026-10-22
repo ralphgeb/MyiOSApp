@@ -3,13 +3,10 @@ import WidgetKit
 
 /// Shared paging state (stored in an App Group so the widget can read it).
 enum Pager {
-    static let appGroup = "group.com.yourname.calendarwidgetapp" // must match the group in project.yml
     static let key = "rowOffset"
     static let step = 3 // rows moved per tap
 
-    static var defaults: UserDefaults {
-        UserDefaults(suiteName: appGroup) ?? .standard
-    }
+    static var defaults: UserDefaults { SharedSettings.defaults }
 }
 
 /// Tapped from the widget's up/down buttons. Widgets can't scroll,
