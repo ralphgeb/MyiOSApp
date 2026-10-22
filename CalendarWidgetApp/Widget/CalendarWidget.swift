@@ -15,7 +15,7 @@ enum Layout {
     /// White space between one day's last event and the next day's header, with the hairline
     /// in the middle. Matches the gap under today's date (a little extra makes up for the
     /// smaller text sizes around the hairline).
-    static let dayGap: CGFloat = 10
+    static let dayGap: CGFloat = 18
 }
 
 // MARK: - Model
@@ -317,7 +317,7 @@ struct CalendarWidgetView: View {
                     Rectangle()
                         .fill(textColor.opacity(0.35))
                         .frame(height: 1 / displayScale)
-                        .padding(.top, Layout.dayGap / 2 - 3)
+                        .padding(.top, Layout.dayGap / 2)
                         .padding(.bottom, Layout.dayGap / 2)
                 }
                 Text(day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
