@@ -84,18 +84,11 @@ struct ContentView: View {
     /// One row that opens the list of calendar switches.
     private var calendarsSection: some View {
         Section {
-            if !purchase.isPro {
-                Button { showPaywall = true } label: {
-                    HStack {
-                        Label("Calendars", systemImage: "folder")
-                        Spacer()
-                        Image(systemName: "lock.fill").foregroundStyle(.secondary)
-                    }
-                }
-                .foregroundStyle(.primary)
-            } else {
             NavigationLink {
-                CalendarTogglesView(calendars: calendars, hidden: $hidden, onChange: {
+                CalendarTogglesView(calendars: calendars, hidden: $hidden,
+                                    isUnlocked: purchase.isPro,
+                                    onLocked: { showPaywall = true },
+                                    onChange: {
                     SharedSettings.hiddenCalendarIDs = hidden
                     scheduleWidgetReload()
                 })
@@ -106,7 +99,6 @@ struct ContentView: View {
                     Text("\(calendars.filter { !hidden.contains($0.calendarIdentifier) }.count) of \(calendars.count) on")
                         .foregroundStyle(.secondary)
                 }
-            }
             }
         }
     }
@@ -148,18 +140,21 @@ struct ContentView: View {
 
     private var optionsSection: some View {
         Section {
-            Stepper("Days Shown: \(daysAhead)", value: $daysAhead, in: 1...7)
+            locked(Stepper("Days Shown: \(daysAhead)", value: $daysAhead, in: 1...7)
                 .onChange(of: daysAhead) { _, new in
                     SharedSettings.daysAhead = new
                     scheduleWidgetReload()
-                }
-            Toggle("Show All-Day Events", isOn: $showAllDay)
+                })
+            locked(Toggle("Show All-Day Events", isOn: $showAllDay)
                 .onChange(of: showAllDay) { _, new in
                     SharedSettings.showAllDay = new
                     scheduleWidgetReload()
-                }
+                })
         } header: {
-            Text("Options")
+            HStack {
+                Text("Options")
+                if !purchase.isPro { Image(systemName: "lock.fill").imageScale(.small) }
+            }
         } footer: {
             Text("Days shown includes today.")
         }
@@ -266,6 +261,8 @@ struct ContentView: View {
 struct CalendarTogglesView: View {
     let calendars: [EKCalendar]
     @Binding var hidden: Set<String>
+    let isUnlocked: Bool
+    let onLocked: () -> Void
     let onChange: () -> Void
 
     private var grouped: [(title: String, calendars: [EKCalendar])] {
@@ -286,6 +283,13 @@ struct CalendarTogglesView: View {
                                 Image(systemName: "circle.fill")
                                     .foregroundStyle(Color(cgColor: cal.cgColor))
                                     .imageScale(.small)
+                            }
+                        }
+                        // Locked: tapping a calendar opens the unlock window instead of switching it.
+                        .allowsHitTesting(isUnlocked)
+                        .overlay {
+                            if !isUnlocked {
+                                Color.clear.contentShape(Rectangle()).onTapGesture(perform: onLocked)
                             }
                         }
                     }
