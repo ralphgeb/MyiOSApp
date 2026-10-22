@@ -9,6 +9,10 @@ enum Layout {
     /// Space under today's date before the first event. The old gap was 3 pt of layout
     /// (about 10 pt visible); 8 pt here makes the visible gap about 1.5x bigger.
     static let headerGap: CGFloat = 8
+
+    /// Space between "Thursday" and "22 October". Negative pulls the lines closer
+    /// (half the old visible gap).
+    static let dateLineSpacing: CGFloat = -5
 }
 
 // MARK: - Model
@@ -40,7 +44,7 @@ struct CalendarEntry: TimelineEntry {
     let date: Date               // when this entry becomes active (drives the orange highlight)
     let events: [CalEvent]
     let page: Int                // which page of events to show
-    let weatherSymbol: String?   // SF Symbol name, nil = no weather yet
+    let weatherIcon: String?     // custom icon name, nil = no weather yet
     let background: Color
     let textColor: Color
 }
@@ -89,7 +93,7 @@ struct Provider: TimelineProvider {
         CalendarEntry(date: date,
                       events: events,
                       page: Pager.page,
-                      weatherSymbol: weather?.symbolName,
+                      weatherIcon: weather?.iconName,
                       background: SharedSettings.backgroundColor?.color ?? .clear,
                       textColor: SharedSettings.textColor?.color ?? .primary)
     }
@@ -257,11 +261,11 @@ struct CalendarWidgetView: View {
         .containerBackground(entry.background, for: .widget)
     }
 
-    /// Today: weekday bold, date + month larger and thin, weather icon at the right.
-    /// Stays on screen whichever page is showing.
+    /// Today: weekday bold, date + month larger and thin, weather icon at the right
+    /// (centred on the two lines). Stays on screen whichever page is showing.
     private var pinnedHeader: some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 0) {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: Layout.dateLineSpacing) {
                 Text(entry.date.formatted(.dateTime.weekday(.wide)))
                     .font(.system(size: 18, weight: .bold))
                 Text(entry.date.formatted(.dateTime.day().month(.wide)))
@@ -272,11 +276,8 @@ struct CalendarWidgetView: View {
 
             Spacer(minLength: 0)
 
-            if let symbol = entry.weatherSymbol {
-                Image(systemName: symbol)
-                    .font(.system(size: 30, weight: .ultraLight))   // thin line icon
-                    .symbolRenderingMode(.monochrome)
-                    .padding(.top, 2)
+            if let icon = entry.weatherIcon {
+                WeatherIconView(name: icon, color: entry.textColor, size: 40)
             }
         }
     }
