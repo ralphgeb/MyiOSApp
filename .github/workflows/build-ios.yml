@@ -112,4 +112,7 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee build/export.log || {
+            grep -iE "error|invalid|failed|already|rejected|missing" build/export.log | sort -u | head -15 | while read -r l; do echo "::error::${l:0:400}"; done
+            exit 1
+          }
