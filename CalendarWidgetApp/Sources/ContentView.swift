@@ -18,7 +18,7 @@ struct ContentView: View {
     @State private var colorRefresh = 0          // bumped to redraw the colour pickers
     @State private var pendingReload: Task<Void, Never>?
     @StateObject private var location = LocationAccess()
-    @StateObject private var store = Store()
+    @StateObject private var purchase = Store()
     @State private var showPaywall = false
 
     var body: some View {
@@ -33,7 +33,7 @@ struct ContentView: View {
             .navigationTitle("Calendar Widget")
             .navigationBarTitleDisplayMode(.inline)   // compact title instead of the large one
             .onAppear(perform: reload)
-            .sheet(isPresented: $showPaywall) { PaywallView(store: store) }
+            .sheet(isPresented: $showPaywall) { PaywallView(store: purchase) }
         }
     }
 
@@ -84,7 +84,7 @@ struct ContentView: View {
     /// One row that opens the list of calendar switches.
     private var calendarsSection: some View {
         Section {
-            if !store.isPro {
+            if !purchase.isPro {
                 Button { showPaywall = true } label: {
                     HStack {
                         Label("Calendars", systemImage: "folder")
@@ -114,9 +114,9 @@ struct ContentView: View {
     /// While locked, taps on a row open the upgrade window instead.
     private func locked<V: View>(_ view: V) -> some View {
         view
-            .allowsHitTesting(store.isPro)
+            .allowsHitTesting(purchase.isPro)
             .overlay {
-                if !store.isPro {
+                if !purchase.isPro {
                     Color.clear.contentShape(Rectangle()).onTapGesture { showPaywall = true }
                 }
             }
@@ -138,7 +138,7 @@ struct ContentView: View {
         } header: {
             HStack {
                 Text("Widget Customisation")
-                if !store.isPro { Image(systemName: "lock.fill").imageScale(.small) }
+                if !purchase.isPro { Image(systemName: "lock.fill").imageScale(.small) }
             }
         } footer: {
             Text("The background is transparent by default. The highlight color marks the event happening now. Lower the opacity in the color picker to make it see-through. Once you change a color, turn on the switch to use your colors in both Light and Dark mode. When it's off, each mode keeps its own colors. Reset Colors turns it off again.")
