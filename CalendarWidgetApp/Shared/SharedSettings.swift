@@ -73,7 +73,8 @@ enum SharedSettings {
     struct ColorSet: Codable, Equatable {
         var background: RGBA?
         var text: RGBA?
-        var isEmpty: Bool { background == nil && text == nil }
+        var highlight: RGBA?      // colour of the event happening now (default orange)
+        var isEmpty: Bool { background == nil && text == nil && highlight == nil }
     }
 
     /// Everything the widget needs to pick its colours.

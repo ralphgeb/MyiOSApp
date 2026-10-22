@@ -101,6 +101,7 @@ struct ContentView: View {
         Section {
             ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: true)
             ColorPicker("Text Color", selection: textBinding, supportsOpacity: false)
+            ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false)
             Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
                 .disabled(!hasCustomColors)
             Button("Reset Colors", role: .destructive) {
@@ -112,7 +113,7 @@ struct ContentView: View {
         } header: {
             Text("Widget Customisation")
         } footer: {
-            Text("The background is transparent by default. Lower the opacity in the color picker to make it see-through. Once you change a color, turn on the switch to use your colors in both Light and Dark mode. When it's off, each mode keeps its own colors. Reset Colors turns it off again.")
+            Text("The background is transparent by default. The highlight color marks the event happening now. Lower the opacity in the color picker to make it see-through. Once you change a color, turn on the switch to use your colors in both Light and Dark mode. When it's off, each mode keeps its own colors. Reset Colors turns it off again.")
         }
         .id(colorRefresh)
     }
@@ -177,6 +178,17 @@ struct ContentView: View {
             get: { SharedSettings.editableColors(for: scheme).text?.color ?? (scheme == .dark ? .white : .black) },
             set: { new in
                 SharedSettings.updateColors(for: scheme) { $0.text = RGBA(new) }
+                syncColorState()
+                scheduleWidgetReload()
+            }
+        )
+    }
+
+    private var highlightBinding: Binding<Color> {
+        Binding(
+            get: { SharedSettings.editableColors(for: scheme).highlight?.color ?? .orange },
+            set: { new in
+                SharedSettings.updateColors(for: scheme) { $0.highlight = RGBA(new) }
                 syncColorState()
                 scheduleWidgetReload()
             }

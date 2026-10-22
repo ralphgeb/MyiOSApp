@@ -145,6 +145,7 @@ struct CalendarWidgetView: View {
 
     private var colorSet: SharedSettings.ColorSet { entry.colors.resolved(for: scheme) }
     private var textColor: Color { colorSet.text?.color ?? .primary }
+    private var highlightColor: Color { colorSet.highlight?.color ?? .orange }
     private var backgroundColor: Color { colorSet.background?.color ?? .clear }
 
     // MARK: Paging
@@ -184,7 +185,8 @@ struct CalendarWidgetView: View {
     private var rows: [Row] {
         var result: [Row] = []
         var lastDay: Date?
-        for e in entry.events {
+        // Events that have already finished are hidden, so the first row is always what's on now or next.
+        for e in entry.events where e.end > entry.date {
             let d = day(of: e)
             if d != lastDay {
                 if !isToday(d) { result.append(.header(d)) }
@@ -242,7 +244,7 @@ struct CalendarWidgetView: View {
                 pinnedHeader
                     .padding(.bottom, Layout.headerGap)
 
-                if entry.events.isEmpty {
+                if rows.isEmpty {
                     Text("No events to show")
                         .font(.footnote)
                         .opacity(0.6)
@@ -353,7 +355,7 @@ struct CalendarWidgetView: View {
                         .lineLimit(1)
                 }
             }
-            .foregroundStyle(active ? Color.orange : textColor)
+            .foregroundStyle(active ? highlightColor : textColor)
         }
     }
 }
