@@ -25,7 +25,7 @@ final class Store: ObservableObject {
 
     init() {
         updates = Task { [weak self] in
-            for await result in Transaction.updates {
+            for await result in StoreKit.Transaction.updates {
                 await self?.handle(result)
             }
         }
@@ -37,7 +37,7 @@ final class Store: ObservableObject {
     func refresh() async {
         product = try? await Product.products(for: [Self.productID]).first
         var owned = false
-        for await result in Transaction.currentEntitlements {
+        for await result in StoreKit.Transaction.currentEntitlements {
             if case .verified(let t) = result, t.productID == Self.productID, t.revocationDate == nil {
                 owned = true
             }
@@ -77,7 +77,7 @@ final class Store: ObservableObject {
         setPro(true)
     }
 
-    private func handle(_ result: VerificationResult<Transaction>) async {
+    private func handle(_ result: VerificationResult<StoreKit.Transaction>) async {
         guard case .verified(let t) = result, t.productID == Self.productID else { return }
         await t.finish()
         setPro(t.revocationDate == nil)
