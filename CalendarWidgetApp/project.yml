@@ -28,6 +28,7 @@ targets:
           - UIInterfaceOrientationPortrait
         ITSAppUsesNonExemptEncryption: false   # skips the export-compliance question in TestFlight
         NSCalendarsFullAccessUsageDescription: Shows your upcoming events in the widget.
+        NSLocationWhenInUseUsageDescription: Shows the weather where you are in the widget.
     entitlements:
       path: Sources/App.entitlements
       properties:
@@ -50,6 +51,8 @@ targets:
       properties:
         CFBundleDisplayName: Upcoming Events
         NSCalendarsFullAccessUsageDescription: Shows your upcoming events in the widget.
+        NSLocationWhenInUseUsageDescription: Shows the weather where you are in the widget.
+        NSWidgetWantsLocation: true
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

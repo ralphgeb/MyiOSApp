@@ -1,8 +1,9 @@
 import SwiftUI
 import EventKit
+import CoreLocation
 import WidgetKit
 
-/// Settings page: choose which calendars the widget shows.
+/// Settings page: choose which calendars the widget shows and how it looks.
 struct ContentView: View {
     private let store = EKEventStore()
 
@@ -11,6 +12,8 @@ struct ContentView: View {
     @State private var hidden = SharedSettings.hiddenCalendarIDs
     @State private var daysAhead = SharedSettings.daysAhead
     @State private var showAllDay = SharedSettings.showAllDay
+    @State private var colorRefresh = 0          // bumped by "Reset Colors" to redraw the pickers
+    @StateObject private var location = LocationAccess()
 
     var body: some View {
         NavigationStack {
@@ -31,8 +34,10 @@ struct ContentView: View {
 
     private var settingsForm: some View {
         Form {
-            calendarSections
+            calendarsSection
+            customisationSection
             optionsSection
+            weatherSection
             Section {
             } footer: {
                 Text("To add the widget, touch and hold your Home Screen, tap the add button, then choose Upcoming Events.")
@@ -69,23 +74,40 @@ struct ContentView: View {
 
     // MARK: Sections
 
-    /// One section per account (iCloud, Gmail, Other...), a toggle per calendar.
-    private var calendarSections: some View {
-        ForEach(groupedCalendars, id: \.title) { group in
-            Section(group.title) {
-                ForEach(group.calendars, id: \.calendarIdentifier) { cal in
-                    Toggle(isOn: binding(for: cal)) {
-                        Label {
-                            Text(cal.title)
-                        } icon: {
-                            Image(systemName: "circle.fill")
-                                .foregroundStyle(Color(cgColor: cal.cgColor))
-                                .imageScale(.small)
-                        }
-                    }
+    /// One row that opens the list of calendar toggles.
+    private var calendarsSection: some View {
+        Section {
+            NavigationLink {
+                CalendarTogglesView(calendars: calendars, hidden: $hidden, onChange: {
+                    SharedSettings.hiddenCalendarIDs = hidden
+                    pushToWidget()
+                })
+            } label: {
+                HStack {
+                    Label("Calendar Toggles", systemImage: "folder")
+                    Spacer()
+                    Text("\(calendars.filter { !hidden.contains($0.calendarIdentifier) }.count) of \(calendars.count) on")
+                        .foregroundStyle(.secondary)
                 }
             }
         }
+    }
+
+    private var customisationSection: some View {
+        Section {
+            ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: true)
+            ColorPicker("Text Color", selection: textBinding, supportsOpacity: false)
+            Button("Reset Colors", role: .destructive) {
+                SharedSettings.resetColors()
+                colorRefresh += 1
+                pushToWidget()
+            }
+        } header: {
+            Text("Widget Customisation")
+        } footer: {
+            Text("The background is transparent by default. Lower the opacity in the color picker to make it see-through.")
+        }
+        .id(colorRefresh)
     }
 
     private var optionsSection: some View {
@@ -107,25 +129,46 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Data
-
-    private var groupedCalendars: [(title: String, calendars: [EKCalendar])] {
-        Dictionary(grouping: calendars) { $0.source?.title ?? "Other" }
-            .map { (title: $0.key, calendars: $0.value.sorted { $0.title < $1.title }) }
-            .sorted { $0.title < $1.title }
+    /// The weather icon in the widget needs "While Using" location access.
+    private var weatherSection: some View {
+        Section {
+            switch location.status {
+            case .authorizedWhenInUse, .authorizedAlways:
+                Label("Weather is on", systemImage: "checkmark.circle")
+                    .foregroundStyle(.secondary)
+            case .denied, .restricted:
+                Button("Open Settings to Allow Location") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            default:
+                Button("Allow Location for Weather") { location.request() }
+            }
+        } header: {
+            Text("Weather")
+        } footer: {
+            Text("Shows the weather where you are, as an icon at the top of the widget.")
+        }
     }
 
-    private func binding(for cal: EKCalendar) -> Binding<Bool> {
+    // MARK: Colour bindings (read and write the shared settings directly)
+
+    private var backgroundBinding: Binding<Color> {
         Binding(
-            get: { !hidden.contains(cal.calendarIdentifier) },
-            set: { isOn in
-                if isOn { hidden.remove(cal.calendarIdentifier) }
-                else { hidden.insert(cal.calendarIdentifier) }
-                SharedSettings.hiddenCalendarIDs = hidden
-                pushToWidget()
-            }
+            get: { SharedSettings.backgroundColor?.color ?? .clear },
+            set: { SharedSettings.backgroundColor = RGBA($0); pushToWidget() }
         )
     }
+
+    private var textBinding: Binding<Color> {
+        Binding(
+            get: { SharedSettings.textColor?.color ?? .white },
+            set: { SharedSettings.textColor = RGBA($0); pushToWidget() }
+        )
+    }
+
+    // MARK: Data
 
     private func reload() {
         status = EKEventStore.authorizationStatus(for: .event)
@@ -137,4 +180,89 @@ struct ContentView: View {
     private func pushToWidget() {
         WidgetCenter.shared.reloadAllTimelines()
     }
+}
+
+/// The "folder": every calendar with its own on/off switch, grouped by account.
+struct CalendarTogglesView: View {
+    let calendars: [EKCalendar]
+    @Binding var hidden: Set<String>
+    let onChange: () -> Void
+
+    private var grouped: [(title: String, calendars: [EKCalendar])] {
+        Dictionary(grouping: calendars) { $0.source?.title ?? "Other" }
+            .map { (title: $0.key, calendars: $0.value.sorted { $0.title < $1.title }) }
+            .sorted { $0.title < $1.title }
+    }
+
+    var body: some View {
+        Form {
+            ForEach(grouped, id: \.title) { group in
+                Section(group.title) {
+                    ForEach(group.calendars, id: \.calendarIdentifier) { cal in
+                        Toggle(isOn: binding(for: cal)) {
+                            Label {
+                                Text(cal.title)
+                            } icon: {
+                                Image(systemName: "circle.fill")
+                                    .foregroundStyle(Color(cgColor: cal.cgColor))
+                                    .imageScale(.small)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Calendar Toggles")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func binding(for cal: EKCalendar) -> Binding<Bool> {
+        Binding(
+            get: { !hidden.contains(cal.calendarIdentifier) },
+            set: { isOn in
+                if isOn { hidden.remove(cal.calendarIdentifier) }
+                else { hidden.insert(cal.calendarIdentifier) }
+                onChange()
+            }
+        )
+    }
+}
+
+/// Watches the location permission and remembers where the user is,
+/// so the widget can look up the weather.
+final class LocationAccess: NSObject, ObservableObject, CLLocationManagerDelegate {
+    @Published var status: CLAuthorizationStatus
+    private let manager = CLLocationManager()
+
+    override init() {
+        status = .notDetermined
+        super.init()
+        status = manager.authorizationStatus
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyKilometer
+        if status == .authorizedWhenInUse || status == .authorizedAlways {
+            manager.requestLocation()
+        }
+    }
+
+    func request() {
+        manager.requestWhenInUseAuthorization()
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        status = manager.authorizationStatus
+        if status == .authorizedWhenInUse || status == .authorizedAlways {
+            manager.requestLocation()
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let loc = locations.last else { return }
+        SharedSettings.lastCoordinate = SharedSettings.Coordinate(lat: loc.coordinate.latitude,
+                                                                  lon: loc.coordinate.longitude)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
