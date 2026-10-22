@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WidgetKit
 import EventKit
 import AppIntents
@@ -148,8 +149,11 @@ struct CalendarWidgetView: View {
 
     // MARK: Paging
 
-    /// Number of side-by-side columns: the extra large widget (iPad) uses two.
-    private var columns: Int { family == .systemExtraLarge ? 2 : 1 }
+    /// Number of side-by-side columns: the wide extra large widget on iPad uses two.
+    /// On iPhone (iOS 27) the extra large widget is tall, so it stays one column.
+    private var columns: Int {
+        family == .systemExtraLarge && UIDevice.current.userInterfaceIdiom == .pad ? 2 : 1
+    }
 
     /// Space for one column of events under the pinned header, in single-line units
     /// (event = 2, date header = 1).
@@ -157,6 +161,7 @@ struct CalendarWidgetView: View {
         switch family {
         case .systemSmall: return 3
         case .systemMedium: return 4
+        case .systemExtraLarge: return UIDevice.current.userInterfaceIdiom == .pad ? 15 : 24
         default: return 15
         }
     }
@@ -365,7 +370,7 @@ struct CalendarListWidget: Widget {
         }
         .configurationDisplayName("Upcoming Events")
         .description("Your upcoming events. Current event shows in orange.")
-        // The extra large size only exists on iPad.
+        // Extra large: iPad, and iPhone from iOS 27.
         .supportedFamilies([.systemMedium, .systemLarge, .systemExtraLarge])
     }
 }
