@@ -158,20 +158,20 @@ struct CalendarWidgetView: View {
         family == .systemExtraLarge && UIDevice.current.userInterfaceIdiom == .pad ? 2 : 1
     }
 
-    /// Space for one column of events under the pinned header, in single-line units
-    /// (event = 2, date header = 1).
-    private var capacity: Int {
-        switch family {
-        case .systemSmall: return 3
-        case .systemMedium: return 4
-        case .systemExtraLarge: return UIDevice.current.userInterfaceIdiom == .pad ? 15 : 24
-        default: return 15
-        }
+    /// Approximate on-screen heights (points) used to decide how many rows fit.
+    private enum Cost {
+        static let event: CGFloat = 36          // two lines + spacing
+        static let header: CGFloat = 23         // "Fri 23 Oct"
+        static let separator: CGFloat = Layout.dayGap + 2   // hairline and its padding
+        static let pinnedHeader: CGFloat = 46 + Layout.headerGap
+        static let safety: CGFloat = 8
     }
 
-    private func weight(_ row: Row) -> Int {
-        if case .event = row { return 2 }
-        return 1
+    private func cost(_ row: Row, firstInChunk: Bool) -> CGFloat {
+        switch row {
+        case .event: return Cost.event
+        case .header: return Cost.header + (firstInChunk ? 0 : Cost.separator)
+        }
     }
 
     private func isToday(_ day: Date) -> Bool {
@@ -202,20 +202,21 @@ struct CalendarWidgetView: View {
     /// Splits the rows into column-sized chunks. A chunk never ends on a lonely date header
     /// (that day moves to the next chunk), and a chunk that starts part-way through a day
     /// gets that day's header re-added on top. One chunk per page, or two on the XL widget.
-    private var chunks: [[Row]] {
+    private func chunks(fitting height: CGFloat) -> [[Row]] {
+        let capacity = max(Cost.event, height - Cost.pinnedHeader - Cost.safety)
         let all = rows
         var result: [[Row]] = []
         var i = 0
         while i < all.count {
             var chunk: [Row] = []
-            var used = 0
+            var used: CGFloat = 0
             var added = 0
             if case .event(let e) = all[i], !isToday(day(of: e)) {
                 chunk.append(.header(day(of: e)))
-                used += 1
+                used += Cost.header
             }
             while i < all.count {
-                let w = weight(all[i])
+                let w = cost(all[i], firstInChunk: chunk.isEmpty)
                 if used + w > capacity && added > 0 { break }
                 chunk.append(all[i])
                 used += w
@@ -232,7 +233,16 @@ struct CalendarWidgetView: View {
     }
 
     var body: some View {
-        let allChunks = chunks
+        GeometryReader { geo in
+            content(height: geo.size.height)
+        }
+        .foregroundStyle(textColor)
+        .containerBackground(backgroundColor, for: .widget)
+    }
+
+    @ViewBuilder
+    private func content(height: CGFloat) -> some View {
+        let allChunks = chunks(fitting: height)
         let pageCount = max(1, (allChunks.count + columns - 1) / columns)
         let pageIndex = min(entry.page, pageCount - 1)
         let lower = min(pageIndex * columns, allChunks.count)
@@ -285,8 +295,7 @@ struct CalendarWidgetView: View {
                 .foregroundStyle(textColor.opacity(0.7))
             }
         }
-        .foregroundStyle(textColor)
-        .containerBackground(backgroundColor, for: .widget)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     /// Today: weekday bold, date + month larger and thin, weather icon at the right
