@@ -47,6 +47,14 @@ jobs:
         run: |
           echo "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
 
+      - name: Select the newest released Xcode (needed for the iOS 27 full-page widget)
+        run: |
+          echo "Installed Xcodes:"; ls -d /Applications/Xcode*.app
+          best=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE "beta|rc|preview" | sort -V | tail -1)
+          if [ -n "$best" ]; then sudo xcode-select -s "$best/Contents/Developer"; fi
+          xcodebuild -version; swift --version
+          echo "::notice::Using $(xcodebuild -version | head -1) / $(swift --version 2>&1 | head -1)"
+
       - name: Generate Xcode project (XcodeGen)
         run: |
           brew install xcodegen

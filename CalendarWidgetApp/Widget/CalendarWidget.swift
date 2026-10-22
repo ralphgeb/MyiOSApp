@@ -377,14 +377,22 @@ struct CalendarListWidget: Widget {
     static let kind = SharedSettings.widgetKind
     let kind = SharedSettings.widgetKind
 
+    static var families: [WidgetFamily] {
+        var f: [WidgetFamily] = [.systemMedium, .systemLarge, .systemExtraLarge]
+        #if compiler(>=6.4)
+        if #available(iOS 27, *) { f.append(.systemExtraLargePortrait) }
+        #endif
+        return f
+    }
+
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
             CalendarWidgetView(entry: entry)
         }
         .configurationDisplayName("Upcoming Events")
         .description("Your upcoming events. Current event shows in orange.")
-        // Extra large: iPad, and iPhone from iOS 27.
-        .supportedFamilies([.systemMedium, .systemLarge, .systemExtraLarge])
+        // Extra large: iPad. On iPhone, iOS 27 adds a full-page 4x6 size (needs the iOS 27 SDK).
+        .supportedFamilies(Self.families)
     }
 }
 
