@@ -34,7 +34,7 @@ struct PageIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         Pager.page = target
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetCenter.shared.reloadTimelines(ofKind: CalendarListWidget.kind)
         return .result()
     }
 }

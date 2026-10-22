@@ -14,7 +14,8 @@ enum WeatherProvider {
 
     static func current() async -> SharedSettings.WeatherSnapshot? {
         let cached = SharedSettings.weather
-        if let cached, Date().timeIntervalSince(cached.fetched) < 20 * 60 {
+        // Weather updates once an hour: reuse the saved value until it is 60 minutes old.
+        if let cached, Date().timeIntervalSince(cached.fetched) < 60 * 60 {
             return cached
         }
 
@@ -25,7 +26,7 @@ enum WeatherProvider {
         }
 
         // Offline or no location: keep showing a recent value rather than nothing.
-        if let cached, Date().timeIntervalSince(cached.fetched) < 6 * 3600 { return cached }
+        if let cached, Date().timeIntervalSince(cached.fetched) < 3 * 3600 { return cached }
         return nil
     }
 

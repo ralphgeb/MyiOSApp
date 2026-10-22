@@ -26,6 +26,7 @@ struct RGBA: Codable, Equatable {
 /// Both targets compile this file, and both read the same App Group storage.
 enum SharedSettings {
     static let appGroup = "group.com.ralphgeb.calendarwidgetapp" // must match project.yml
+    static let widgetKind = "CalendarListWidget"
 
     static var defaults: UserDefaults {
         UserDefaults(suiteName: appGroup) ?? .standard
@@ -35,8 +36,10 @@ enum SharedSettings {
         static let hiddenCalendars = "hiddenCalendarIDs"
         static let daysAhead = "daysAhead"
         static let showAllDay = "showAllDayEvents"
-        static let background = "backgroundColor"
-        static let text = "textColor"
+        static let colorsBoth = "colorsBoth"
+        static let colorsLight = "colorsLight"
+        static let colorsDark = "colorsDark"
+        static let ignoreAppearance = "ignoreAppearance"
         static let weather = "weatherSnapshot"
         static let coordinate = "lastCoordinate"
     }
@@ -66,19 +69,74 @@ enum SharedSettings {
 
     // MARK: Colours (nil = default: transparent background, system text colour)
 
-    static var backgroundColor: RGBA? {
-        get { load(Key.background) }
-        set { save(newValue, Key.background) }
+    /// Background and text colour. Either can be nil, which means "use the default".
+    struct ColorSet: Codable, Equatable {
+        var background: RGBA?
+        var text: RGBA?
+        var isEmpty: Bool { background == nil && text == nil }
     }
 
-    static var textColor: RGBA? {
-        get { load(Key.text) }
-        set { save(newValue, Key.text) }
+    /// Everything the widget needs to pick its colours.
+    /// When `ignoreAppearance` is on, one set (`both`) is used in Light and Dark mode.
+    /// When it's off, Light and Dark mode each keep their own set.
+    struct ColorSettings {
+        var ignoreAppearance: Bool
+        var both: ColorSet
+        var light: ColorSet
+        var dark: ColorSet
+
+        func resolved(for scheme: ColorScheme) -> ColorSet {
+            if ignoreAppearance { return both }
+            return scheme == .dark ? dark : light
+        }
     }
 
+    static var colorSettings: ColorSettings {
+        ColorSettings(ignoreAppearance: ignoreAppearance,
+                      both: load(Key.colorsBoth) ?? ColorSet(),
+                      light: load(Key.colorsLight) ?? ColorSet(),
+                      dark: load(Key.colorsDark) ?? ColorSet())
+    }
+
+    static var ignoreAppearance: Bool {
+        get { defaults.object(forKey: Key.ignoreAppearance) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: Key.ignoreAppearance) }
+    }
+
+    /// True once the user has changed any colour from the original.
+    static var hasCustomColors: Bool {
+        let c = colorSettings
+        return !(c.both.isEmpty && c.light.isEmpty && c.dark.isEmpty)
+    }
+
+    /// The colours currently being edited: the shared set if the toggle is on, otherwise the
+    /// set for the mode the phone is in right now.
+    static func editableColors(for scheme: ColorScheme) -> ColorSet {
+        colorSettings.resolved(for: scheme)
+    }
+
+    static func updateColors(for scheme: ColorScheme, _ change: (inout ColorSet) -> Void) {
+        let key = ignoreAppearance ? Key.colorsBoth : (scheme == .dark ? Key.colorsDark : Key.colorsLight)
+        var set: ColorSet = load(key) ?? ColorSet()
+        change(&set)
+        save(set.isEmpty ? nil : set, key)
+    }
+
+    /// Turning the toggle on makes the colours you see right now apply in both modes.
+    static func setIgnoreAppearance(_ on: Bool, currentScheme: ColorScheme) {
+        if on {
+            let current = colorSettings.resolved(for: currentScheme)
+            save(current.isEmpty ? nil : current, Key.colorsBoth)
+        }
+        ignoreAppearance = on
+    }
+
+    /// Back to the original look, and the toggle goes off.
     static func resetColors() {
-        backgroundColor = nil
-        textColor = nil
+        save(nil as ColorSet?, Key.colorsBoth)
+        save(nil as ColorSet?, Key.colorsLight)
+        save(nil as ColorSet?, Key.colorsDark)
+        ignoreAppearance = false
     }
 
     // MARK: Weather cache (written by the widget)

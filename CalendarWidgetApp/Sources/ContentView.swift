@@ -7,12 +7,16 @@ import WidgetKit
 struct ContentView: View {
     private let store = EKEventStore()
 
+    @Environment(\.colorScheme) private var scheme
     @State private var status = EKEventStore.authorizationStatus(for: .event)
     @State private var calendars: [EKCalendar] = []
     @State private var hidden = SharedSettings.hiddenCalendarIDs
     @State private var daysAhead = SharedSettings.daysAhead
     @State private var showAllDay = SharedSettings.showAllDay
-    @State private var colorRefresh = 0          // bumped by "Reset Colors" to redraw the pickers
+    @State private var ignoreAppearance = SharedSettings.ignoreAppearance
+    @State private var hasCustomColors = SharedSettings.hasCustomColors
+    @State private var colorRefresh = 0          // bumped to redraw the colour pickers
+    @State private var pendingReload: Task<Void, Never>?
     @StateObject private var location = LocationAccess()
 
     var body: some View {
@@ -64,7 +68,7 @@ struct ContentView: View {
                     Task {
                         _ = try? await store.requestFullAccessToEvents()
                         reload()
-                        pushToWidget()
+                        scheduleWidgetReload()
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -74,17 +78,17 @@ struct ContentView: View {
 
     // MARK: Sections
 
-    /// One row that opens the list of calendar toggles.
+    /// One row that opens the list of calendar switches.
     private var calendarsSection: some View {
         Section {
             NavigationLink {
                 CalendarTogglesView(calendars: calendars, hidden: $hidden, onChange: {
                     SharedSettings.hiddenCalendarIDs = hidden
-                    pushToWidget()
+                    scheduleWidgetReload()
                 })
             } label: {
                 HStack {
-                    Label("Calendar Toggles", systemImage: "folder")
+                    Label("Calendars", systemImage: "folder")
                     Spacer()
                     Text("\(calendars.filter { !hidden.contains($0.calendarIdentifier) }.count) of \(calendars.count) on")
                         .foregroundStyle(.secondary)
@@ -97,15 +101,18 @@ struct ContentView: View {
         Section {
             ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: true)
             ColorPicker("Text Color", selection: textBinding, supportsOpacity: false)
+            Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
+                .disabled(!hasCustomColors)
             Button("Reset Colors", role: .destructive) {
                 SharedSettings.resetColors()
+                syncColorState()
                 colorRefresh += 1
-                pushToWidget()
+                scheduleWidgetReload()
             }
         } header: {
             Text("Widget Customisation")
         } footer: {
-            Text("The background is transparent by default. Lower the opacity in the color picker to make it see-through.")
+            Text("The background is transparent by default. Lower the opacity in the color picker to make it see-through. Once you change a color, turn on the switch to use your colors in both Light and Dark mode. When it's off, each mode keeps its own colors. Reset Colors turns it off again.")
         }
         .id(colorRefresh)
     }
@@ -115,12 +122,12 @@ struct ContentView: View {
             Stepper("Days Shown: \(daysAhead)", value: $daysAhead, in: 1...7)
                 .onChange(of: daysAhead) { _, new in
                     SharedSettings.daysAhead = new
-                    pushToWidget()
+                    scheduleWidgetReload()
                 }
             Toggle("Show All-Day Events", isOn: $showAllDay)
                 .onChange(of: showAllDay) { _, new in
                     SharedSettings.showAllDay = new
-                    pushToWidget()
+                    scheduleWidgetReload()
                 }
         } header: {
             Text("Options")
@@ -148,7 +155,7 @@ struct ContentView: View {
         } header: {
             Text("Weather")
         } footer: {
-            Text("Shows the weather where you are, as an icon at the top of the widget.")
+            Text("Shows the weather where you are, as an icon at the top of the widget. It updates once an hour.")
         }
     }
 
@@ -156,16 +163,41 @@ struct ContentView: View {
 
     private var backgroundBinding: Binding<Color> {
         Binding(
-            get: { SharedSettings.backgroundColor?.color ?? .clear },
-            set: { SharedSettings.backgroundColor = RGBA($0); pushToWidget() }
+            get: { SharedSettings.editableColors(for: scheme).background?.color ?? .clear },
+            set: { new in
+                SharedSettings.updateColors(for: scheme) { $0.background = RGBA(new) }
+                syncColorState()
+                scheduleWidgetReload()
+            }
         )
     }
 
     private var textBinding: Binding<Color> {
         Binding(
-            get: { SharedSettings.textColor?.color ?? .white },
-            set: { SharedSettings.textColor = RGBA($0); pushToWidget() }
+            get: { SharedSettings.editableColors(for: scheme).text?.color ?? (scheme == .dark ? .white : .black) },
+            set: { new in
+                SharedSettings.updateColors(for: scheme) { $0.text = RGBA(new) }
+                syncColorState()
+                scheduleWidgetReload()
+            }
         )
+    }
+
+    private var appearanceBinding: Binding<Bool> {
+        Binding(
+            get: { ignoreAppearance },
+            set: { on in
+                SharedSettings.setIgnoreAppearance(on, currentScheme: scheme)
+                syncColorState()
+                colorRefresh += 1
+                scheduleWidgetReload()
+            }
+        )
+    }
+
+    private func syncColorState() {
+        ignoreAppearance = SharedSettings.ignoreAppearance
+        hasCustomColors = SharedSettings.hasCustomColors
     }
 
     // MARK: Data
@@ -175,14 +207,22 @@ struct ContentView: View {
         if status == .fullAccess {
             calendars = store.calendars(for: .event)
         }
+        syncColorState()
     }
 
-    private func pushToWidget() {
-        WidgetCenter.shared.reloadAllTimelines()
+    /// Battery: wait for changes to settle (a colour picker sends many changes while you drag)
+    /// and refresh only this widget, once.
+    private func scheduleWidgetReload() {
+        pendingReload?.cancel()
+        pendingReload = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            WidgetCenter.shared.reloadTimelines(ofKind: SharedSettings.widgetKind)
+        }
     }
 }
 
-/// The "folder": every calendar with its own on/off switch, grouped by account.
+/// The "Calendars" screen: every calendar with its own on/off switch, grouped by account.
 struct CalendarTogglesView: View {
     let calendars: [EKCalendar]
     @Binding var hidden: Set<String>
@@ -212,7 +252,7 @@ struct CalendarTogglesView: View {
                 }
             }
         }
-        .navigationTitle("Calendar Toggles")
+        .navigationTitle("Calendars")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -254,14 +294,20 @@ final class LocationAccess: NSObject, ObservableObject, CLLocationManagerDelegat
         if status == .authorizedWhenInUse || status == .authorizedAlways {
             manager.requestLocation()
         }
-        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
+        let previous = SharedSettings.lastCoordinate
         SharedSettings.lastCoordinate = SharedSettings.Coordinate(lat: loc.coordinate.latitude,
                                                                   lon: loc.coordinate.longitude)
-        WidgetCenter.shared.reloadAllTimelines()
+        // Battery: only refresh the widget if this is the first fix or you've moved over 5 km.
+        let moved = previous.map {
+            CLLocation(latitude: $0.lat, longitude: $0.lon).distance(from: loc) > 5000
+        } ?? true
+        if moved {
+            WidgetCenter.shared.reloadTimelines(ofKind: SharedSettings.widgetKind)
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}

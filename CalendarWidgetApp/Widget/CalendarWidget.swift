@@ -6,13 +6,16 @@ import AppIntents
 // MARK: - Layout constants
 
 enum Layout {
-    /// Space under today's date before the first event. The old gap was 3 pt of layout
-    /// (about 10 pt visible); 8 pt here makes the visible gap about 1.5x bigger.
+    /// Space under today's date before the first event (about 1.5x the original gap).
     static let headerGap: CGFloat = 8
 
-    /// Space between "Thursday" and "22 October". Negative pulls the lines closer
-    /// (half the old visible gap).
+    /// Space between "Thursday" and "22 October". Negative pulls the lines closer.
     static let dateLineSpacing: CGFloat = -5
+
+    /// White space between one day's last event and the next day's header, with the hairline
+    /// in the middle. Matches the gap under today's date (a little extra makes up for the
+    /// smaller text sizes around the hairline).
+    static let dayGap: CGFloat = 10
 }
 
 // MARK: - Model
@@ -41,12 +44,11 @@ enum Row: Identifiable {
 }
 
 struct CalendarEntry: TimelineEntry {
-    let date: Date               // when this entry becomes active (drives the orange highlight)
+    let date: Date                              // when this entry becomes active (drives the orange highlight)
     let events: [CalEvent]
-    let page: Int                // which page of events to show
-    let weatherIcon: String?     // custom icon name, nil = no weather yet
-    let background: Color
-    let textColor: Color
+    let page: Int                               // which page of events to show
+    let weatherIcon: String?                    // custom icon name, nil = no weather yet
+    let colors: SharedSettings.ColorSettings    // resolved for light/dark when drawing
 }
 
 // MARK: - Provider
@@ -66,26 +68,26 @@ struct Provider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<CalendarEntry>) -> Void) {
         Task {
             let events = fetchEvents()
-            let weather = await WeatherProvider.current()
+            let weather = await WeatherProvider.current()   // network only if the cache is over an hour old
             let now = Date()
 
-            // One entry now, plus one at every event start/end so the orange
-            // "happening now" colour flips exactly on time, plus one at midnight
-            // so today's date rolls over.
+            // Battery: plan only the next few hours. One entry now, one at each event start/end
+            // (so the orange "happening now" colour flips on time) and one at midnight.
+            // The system then asks for a fresh timeline after an hour.
+            let horizon = now.addingTimeInterval(4 * 3600)
             var times: Set<Date> = [now]
             for e in events where !e.isAllDay {
-                if e.start > now { times.insert(e.start) }
-                if e.end > now { times.insert(e.end) }
+                if e.start > now && e.start < horizon { times.insert(e.start) }
+                if e.end > now && e.end < horizon { times.insert(e.end) }
             }
             if let midnight = Calendar.current.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0),
-                                                        matchingPolicy: .nextTime) {
+                                                        matchingPolicy: .nextTime), midnight < horizon {
                 times.insert(midnight)
             }
-            let entries = times.sorted().prefix(40).map {
+            let entries = times.sorted().prefix(16).map {
                 makeEntry(date: $0, events: events, weather: weather)
             }
-            // Refresh at least every 30 min to pick up calendar and weather changes.
-            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60))))
+            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(60 * 60))))
         }
     }
 
@@ -94,8 +96,7 @@ struct Provider: TimelineProvider {
                       events: events,
                       page: Pager.page,
                       weatherIcon: weather?.iconName,
-                      background: SharedSettings.backgroundColor?.color ?? .clear,
-                      textColor: SharedSettings.textColor?.color ?? .primary)
+                      colors: SharedSettings.colorSettings)
     }
 
     private func fetchEvents() -> [CalEvent] {
@@ -111,10 +112,8 @@ struct Provider: TimelineProvider {
         let selected = store.calendars(for: .event).filter { !hidden.contains($0.calendarIdentifier) }
         guard !selected.isEmpty else { return [] }
 
-        let predicate = store.predicateForEvents(withStart: .now.addingTimeInterval(-60 * 60 * 12),
-                                                 end: end, calendars: selected)
+        let predicate = store.predicateForEvents(withStart: startOfToday, end: end, calendars: selected)
         return store.events(matching: predicate)
-            .filter { $0.endDate > startOfToday }
             .filter { SharedSettings.showAllDay || !$0.isAllDay }
             .sorted { $0.startDate < $1.startDate }
             .map { CalEvent(id: $0.eventIdentifier ?? UUID().uuidString,
@@ -139,8 +138,20 @@ struct CalendarWidgetView: View {
     let entry: CalendarEntry
     @Environment(\.widgetFamily) private var family
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorScheme) private var scheme
 
-    /// Space for the paged list under the pinned header, in single-line units
+    // MARK: Colours (custom colours, or the system defaults)
+
+    private var colorSet: SharedSettings.ColorSet { entry.colors.resolved(for: scheme) }
+    private var textColor: Color { colorSet.text?.color ?? .primary }
+    private var backgroundColor: Color { colorSet.background?.color ?? .clear }
+
+    // MARK: Paging
+
+    /// Number of side-by-side columns: the extra large widget (iPad) uses two.
+    private var columns: Int { family == .systemExtraLarge ? 2 : 1 }
+
+    /// Space for one column of events under the pinned header, in single-line units
     /// (event = 2, date header = 1).
     private var capacity: Int {
         switch family {
@@ -179,58 +190,66 @@ struct CalendarWidgetView: View {
         return result
     }
 
-    /// Splits the rows into pages. A page never ends on a lonely date header
-    /// (that day moves to the next page), and a page that starts part-way
-    /// through a day gets that day's header re-added on top.
-    private var pages: [[Row]] {
+    /// Splits the rows into column-sized chunks. A chunk never ends on a lonely date header
+    /// (that day moves to the next chunk), and a chunk that starts part-way through a day
+    /// gets that day's header re-added on top. One chunk per page, or two on the XL widget.
+    private var chunks: [[Row]] {
         let all = rows
-        var pages: [[Row]] = []
+        var result: [[Row]] = []
         var i = 0
         while i < all.count {
-            var page: [Row] = []
+            var chunk: [Row] = []
             var used = 0
             var added = 0
             if case .event(let e) = all[i], !isToday(day(of: e)) {
-                page.append(.header(day(of: e)))
+                chunk.append(.header(day(of: e)))
                 used += 1
             }
             while i < all.count {
                 let w = weight(all[i])
                 if used + w > capacity && added > 0 { break }
-                page.append(all[i])
+                chunk.append(all[i])
                 used += w
                 added += 1
                 i += 1
             }
-            if case .header? = page.last, added > 1 {
-                page.removeLast()
+            if case .header? = chunk.last, added > 1 {
+                chunk.removeLast()
                 i -= 1
             }
-            pages.append(page)
+            result.append(chunk)
         }
-        return pages
+        return result
     }
 
     var body: some View {
-        let allPages = pages
-        let pageIndex = min(entry.page, max(0, allPages.count - 1))
-        let current = allPages.isEmpty ? [] : allPages[pageIndex]
+        let allChunks = chunks
+        let pageCount = max(1, (allChunks.count + columns - 1) / columns)
+        let pageIndex = min(entry.page, pageCount - 1)
+        let lower = min(pageIndex * columns, allChunks.count)
+        let upper = min(lower + columns, allChunks.count)
+        let shown = Array(allChunks[lower..<upper])
         let canPageUp = pageIndex > 0
-        let canPageDown = pageIndex < allPages.count - 1
+        let canPageDown = pageIndex < pageCount - 1
 
         HStack(alignment: .top, spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
                 pinnedHeader
                     .padding(.bottom, Layout.headerGap)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    if entry.events.isEmpty {
-                        Text("No events to show")
-                            .font(.footnote)
-                            .opacity(0.6)
-                    } else {
-                        ForEach(Array(current.enumerated()), id: \.element.id) { index, row in
-                            rowView(row, isFirst: index == 0)
+                if entry.events.isEmpty {
+                    Text("No events to show")
+                        .font(.footnote)
+                        .opacity(0.6)
+                } else {
+                    HStack(alignment: .top, spacing: 18) {
+                        ForEach(Array(shown.enumerated()), id: \.offset) { _, chunk in
+                            VStack(alignment: .leading, spacing: 3) {
+                                ForEach(Array(chunk.enumerated()), id: \.element.id) { index, row in
+                                    rowView(row, isFirst: index == 0)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                     }
                 }
@@ -254,11 +273,11 @@ struct CalendarWidgetView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(entry.textColor.opacity(0.7))
+                .foregroundStyle(textColor.opacity(0.7))
             }
         }
-        .foregroundStyle(entry.textColor)
-        .containerBackground(entry.background, for: .widget)
+        .foregroundStyle(textColor)
+        .containerBackground(backgroundColor, for: .widget)
     }
 
     /// Today: weekday bold, date + month larger and thin, weather icon at the right
@@ -277,7 +296,7 @@ struct CalendarWidgetView: View {
             Spacer(minLength: 0)
 
             if let icon = entry.weatherIcon {
-                WeatherIconView(name: icon, color: entry.textColor, size: 40)
+                WeatherIconView(name: icon, color: textColor, size: 40)
             }
         }
     }
@@ -291,13 +310,15 @@ struct CalendarWidgetView: View {
     private func rowView(_ row: Row, isFirst: Bool) -> some View {
         switch row {
         case .header(let day):
-            VStack(alignment: .leading, spacing: 3) {
-                // Hairline between days: exactly one physical pixel thick.
+            VStack(alignment: .leading, spacing: 0) {
+                // Hairline between days: one physical pixel thick, with equal space above and below
+                // that adds up to Layout.dayGap (the list already adds 3 pt above).
                 if !isFirst {
                     Rectangle()
-                        .fill(entry.textColor.opacity(0.35))
+                        .fill(textColor.opacity(0.35))
                         .frame(height: 1 / displayScale)
-                        .padding(.vertical, 2)
+                        .padding(.top, Layout.dayGap / 2 - 3)
+                        .padding(.bottom, Layout.dayGap / 2)
                 }
                 Text(day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
                     .font(.subheadline.bold())
@@ -327,7 +348,7 @@ struct CalendarWidgetView: View {
                         .lineLimit(1)
                 }
             }
-            .foregroundStyle(active ? Color.orange : entry.textColor)
+            .foregroundStyle(active ? Color.orange : textColor)
         }
     }
 }
@@ -335,7 +356,8 @@ struct CalendarWidgetView: View {
 // MARK: - Widget
 
 struct CalendarListWidget: Widget {
-    let kind = "CalendarListWidget"
+    static let kind = SharedSettings.widgetKind
+    let kind = SharedSettings.widgetKind
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
@@ -343,7 +365,8 @@ struct CalendarListWidget: Widget {
         }
         .configurationDisplayName("Upcoming Events")
         .description("Your upcoming events. Current event shows in orange.")
-        .supportedFamilies([.systemMedium, .systemLarge])
+        // The extra large size only exists on iPad.
+        .supportedFamilies([.systemMedium, .systemLarge, .systemExtraLarge])
     }
 }
 
