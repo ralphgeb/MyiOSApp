@@ -73,7 +73,7 @@ struct Provider: TimelineProvider {
 
             // Battery: plan only the next few hours. One entry now, one at each event start/end
             // (so the orange "happening now" colour flips on time) and one at midnight.
-            // The system then asks for a fresh timeline after an hour.
+            // The system then asks for a fresh timeline after 30 minutes, which also picks up new calendar events.
             let horizon = now.addingTimeInterval(4 * 3600)
             var times: Set<Date> = [now]
             for e in events where !e.isAllDay {
@@ -87,7 +87,7 @@ struct Provider: TimelineProvider {
             let entries = times.sorted().prefix(16).map {
                 makeEntry(date: $0, events: events, weather: weather)
             }
-            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(60 * 60))))
+            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60))))
         }
     }
 

@@ -31,6 +31,10 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.ralphgeb.calendarwidgetapp.refresh
         ITSAppUsesNonExemptEncryption: false   # skips the export-compliance question in TestFlight
         NSCalendarsFullAccessUsageDescription: Shows your upcoming events in the widget.
         NSLocationWhenInUseUsageDescription: Shows the weather where you are in the widget.
