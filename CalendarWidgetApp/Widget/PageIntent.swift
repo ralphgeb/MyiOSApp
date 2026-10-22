@@ -9,6 +9,12 @@ enum Pager {
 
     static var defaults: UserDefaults { SharedSettings.defaults }
 
+    /// +1 when the last tap went down, -1 when it went up (decides which way the list slides).
+    static var direction: Int {
+        get { defaults.integer(forKey: "pageDirection") >= 0 ? 1 : -1 }
+        set { defaults.set(newValue >= 0 ? 1 : -1, forKey: "pageDirection") }
+    }
+
     static var page: Int {
         get {
             let touched = defaults.double(forKey: touchedKey)
@@ -33,6 +39,7 @@ struct PageIntent: AppIntent {
     init(target: Int) { self.target = target }
 
     func perform() async throws -> some IntentResult {
+        Pager.direction = target >= Pager.page ? 1 : -1
         Pager.page = target
         WidgetCenter.shared.reloadTimelines(ofKind: CalendarListWidget.kind)
         return .result()

@@ -48,6 +48,7 @@ struct CalendarEntry: TimelineEntry {
     let date: Date                              // when this entry becomes active (drives the orange highlight)
     let events: [CalEvent]
     let page: Int                               // which page of events to show
+    let direction: Int                          // +1 slid down, -1 slid up (for the page animation)
     let weatherIcon: String?                    // custom icon name, nil = no weather yet
     let colors: SharedSettings.ColorSettings    // resolved for light/dark when drawing
 }
@@ -96,6 +97,7 @@ struct Provider: TimelineProvider {
         CalendarEntry(date: date,
                       events: events,
                       page: Pager.page,
+                      direction: Pager.direction,
                       weatherIcon: weather?.iconName,
                       colors: SharedSettings.isPro
                         ? SharedSettings.colorSettings
@@ -261,6 +263,8 @@ struct CalendarWidgetView: View {
                         .font(.footnote)
                         .opacity(0.6)
                 } else {
+                    // Whole list slides as one block: new rows rise in from the bottom when going
+                    // down (or drop in from the top when going up) while the pinned header stays put.
                     HStack(alignment: .top, spacing: 18) {
                         ForEach(Array(shown.enumerated()), id: \.offset) { _, chunk in
                             VStack(alignment: .leading, spacing: 3) {
@@ -271,6 +275,8 @@ struct CalendarWidgetView: View {
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                     }
+                    .id(pageIndex)
+                    .transition(.push(from: entry.direction >= 0 ? .bottom : .top))
                 }
                 Spacer(minLength: 0)
             }
