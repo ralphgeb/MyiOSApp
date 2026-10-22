@@ -42,6 +42,23 @@ enum SharedSettings {
         static let ignoreAppearance = "ignoreAppearance"
         static let weather = "weatherSnapshot"
         static let coordinate = "lastCoordinate"
+        static let isPro = "isPro"
+        static let testUnlock = "testUnlock"
+    }
+
+    // MARK: Purchase (written by the app, read by the widget)
+
+    /// True once the one-time unlock has been bought. While false, the widget ignores the
+    /// calendar and colour settings.
+    static var isPro: Bool {
+        get { defaults.bool(forKey: Key.isPro) }
+        set { defaults.set(newValue, forKey: Key.isPro) }
+    }
+
+    /// TestFlight-only shortcut used before the product exists in App Store Connect.
+    static var testUnlock: Bool {
+        get { defaults.bool(forKey: Key.testUnlock) }
+        set { defaults.set(newValue, forKey: Key.testUnlock) }
     }
 
     // MARK: Calendars and options

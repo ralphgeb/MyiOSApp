@@ -97,7 +97,9 @@ struct Provider: TimelineProvider {
                       events: events,
                       page: Pager.page,
                       weatherIcon: weather?.iconName,
-                      colors: SharedSettings.colorSettings)
+                      colors: SharedSettings.isPro
+                        ? SharedSettings.colorSettings
+                        : SharedSettings.ColorSettings(ignoreAppearance: false, both: .init(), light: .init(), dark: .init()))
     }
 
     private func fetchEvents() -> [CalEvent] {
@@ -109,7 +111,7 @@ struct Provider: TimelineProvider {
         guard let end = cal.date(byAdding: .day, value: SharedSettings.daysAhead, to: startOfToday) else { return [] }
 
         // Only the calendars the user left switched on in the app.
-        let hidden = SharedSettings.hiddenCalendarIDs
+        let hidden = SharedSettings.isPro ? SharedSettings.hiddenCalendarIDs : []
         let selected = store.calendars(for: .event).filter { !hidden.contains($0.calendarIdentifier) }
         guard !selected.isEmpty else { return [] }
 

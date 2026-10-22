@@ -18,6 +18,8 @@ struct ContentView: View {
     @State private var colorRefresh = 0          // bumped to redraw the colour pickers
     @State private var pendingReload: Task<Void, Never>?
     @StateObject private var location = LocationAccess()
+    @StateObject private var store = Store()
+    @State private var showPaywall = false
 
     var body: some View {
         NavigationStack {
@@ -31,6 +33,7 @@ struct ContentView: View {
             .navigationTitle("Calendar Widget")
             .navigationBarTitleDisplayMode(.inline)   // compact title instead of the large one
             .onAppear(perform: reload)
+            .sheet(isPresented: $showPaywall) { PaywallView(store: store) }
         }
     }
 
@@ -81,6 +84,16 @@ struct ContentView: View {
     /// One row that opens the list of calendar switches.
     private var calendarsSection: some View {
         Section {
+            if !store.isPro {
+                Button { showPaywall = true } label: {
+                    HStack {
+                        Label("Calendars", systemImage: "folder")
+                        Spacer()
+                        Image(systemName: "lock.fill").foregroundStyle(.secondary)
+                    }
+                }
+                .foregroundStyle(.primary)
+            } else {
             NavigationLink {
                 CalendarTogglesView(calendars: calendars, hidden: $hidden, onChange: {
                     SharedSettings.hiddenCalendarIDs = hidden
@@ -94,24 +107,39 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            }
         }
+    }
+
+    /// While locked, taps on a row open the upgrade window instead.
+    private func locked<V: View>(_ view: V) -> some View {
+        view
+            .allowsHitTesting(store.isPro)
+            .overlay {
+                if !store.isPro {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { showPaywall = true }
+                }
+            }
     }
 
     private var customisationSection: some View {
         Section {
-            ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: true)
-            ColorPicker("Text Color", selection: textBinding, supportsOpacity: false)
-            ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false)
-            Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
-                .disabled(!hasCustomColors)
-            Button("Reset Colors", role: .destructive) {
+            locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: true))
+            locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
+            locked(ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false))
+            locked(Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
+                .disabled(!hasCustomColors))
+            locked(Button("Reset Colors", role: .destructive) {
                 SharedSettings.resetColors()
                 syncColorState()
                 colorRefresh += 1
                 scheduleWidgetReload()
-            }
+            })
         } header: {
-            Text("Widget Customisation")
+            HStack {
+                Text("Widget Customisation")
+                if !store.isPro { Image(systemName: "lock.fill").imageScale(.small) }
+            }
         } footer: {
             Text("The background is transparent by default. The highlight color marks the event happening now. Lower the opacity in the color picker to make it see-through. Once you change a color, turn on the switch to use your colors in both Light and Dark mode. When it's off, each mode keeps its own colors. Reset Colors turns it off again.")
         }
