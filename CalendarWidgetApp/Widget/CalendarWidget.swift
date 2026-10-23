@@ -103,11 +103,11 @@ struct Provider: TimelineProvider {
                       events: events,
                       page: Pager.page,
                       direction: Pager.direction,
-                      isPro: preview || SharedSettings.isPro,
                       weatherIcon: weather?.iconName,
                       colors: SharedSettings.isPro
                         ? SharedSettings.colorSettings
-                        : SharedSettings.ColorSettings(ignoreAppearance: false, both: .init(), light: .init(), dark: .init()))
+                        : SharedSettings.ColorSettings(ignoreAppearance: false, both: .init(), light: .init(), dark: .init()),
+                      isPro: preview || SharedSettings.isPro)
     }
 
     private func fetchEvents() -> [CalEvent] {
@@ -254,58 +254,6 @@ struct CalendarWidgetView: View {
             .foregroundStyle(textColor)
             .containerBackground(backgroundColor, for: .widget)
         }
-    }
-
-    // MARK: Small (2x2): day, date and the next event
-
-    private var smallView: some View {
-        let cal = Calendar.current
-        let now = entry.date
-        let next = entry.events.first { $0.end > now }
-        return VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: Layout.dateLineSpacing) {
-                Text(now.formatted(.dateTime.weekday(.wide)))
-                    .font(.system(size: 16, weight: .bold))
-                Text(now.formatted(.dateTime.day().month(.wide)))
-                    .font(.system(size: 22, weight: .thin))
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-
-            Spacer(minLength: 8)
-
-            if let e = next {
-                let active = !e.isAllDay && e.start <= now && e.end > now
-                VStack(alignment: .leading, spacing: 1) {
-                    if !cal.isDate(e.start, inSameDayAs: now) && e.start > now {
-                        Text(e.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                            .font(.system(size: 12, weight: .semibold))
-                            .opacity(0.7)
-                    }
-                    Text(e.isAllDay ? "All day" : "\(clock(e.start))–\(clock(e.end))")
-                        .font(.system(size: 14, weight: .bold))
-                        .monospacedDigit()
-                    Text(e.title)
-                        .font(.system(size: 14, weight: .medium))
-                        .lineLimit(2)
-                    if let loc = e.location {
-                        Text(loc)
-                            .font(.system(size: 12))
-                            .italic()
-                            .lineLimit(1)
-                            .opacity(0.85)
-                    }
-                }
-                .foregroundStyle(active ? highlightColor : textColor)
-            } else {
-                Text("No upcoming events")
-                    .font(.footnote)
-                    .opacity(0.6)
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .foregroundStyle(textColor)
     }
 
     // MARK: Small (2x2): day, date and the next event
