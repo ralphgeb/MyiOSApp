@@ -9,7 +9,8 @@ struct RGBA: Codable, Equatable {
     var b: Double
     var a: Double
 
-    var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: a) }
+    /// Always a solid colour (no transparency).
+    var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: 1) }
 
     init(r: Double, g: Double, b: Double, a: Double) {
         self.r = r; self.g = g; self.b = b; self.a = a

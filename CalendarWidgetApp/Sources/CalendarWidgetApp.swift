@@ -20,7 +20,7 @@ struct CalendarWidgetApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 // Calendar changed while the app is open: refresh the widget straight away.
                 .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
                     SharedSettings.reloadWidgets()

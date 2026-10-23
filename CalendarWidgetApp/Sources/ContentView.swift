@@ -30,10 +30,9 @@ struct ContentView: View {
                     accessNeeded
                 }
             }
-            .navigationTitle("Calendar Widget")
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)   // compact title instead of the large one
             .onAppear(perform: reload)
-            .task { await askForPermissions() }
             .sheet(isPresented: $showPaywall) { PaywallView(store: purchase) }
         }
     }
@@ -99,7 +98,7 @@ struct ContentView: View {
                 }
             }
         } footer: {
-            if !purchase.isPro { Text("One payment unlocks the Lock Screen widgets and all settings.") }
+            if !purchase.isPro { Text("One payment unlocks the small, medium and Lock Screen widgets and all settings.") }
         }
     }
 
@@ -138,7 +137,7 @@ struct ContentView: View {
 
     private var customisationSection: some View {
         Section {
-            locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: true))
+            locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: false))
             locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
             locked(ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false))
             locked(Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
@@ -155,7 +154,7 @@ struct ContentView: View {
                 if !purchase.isPro { Image(systemName: "lock.fill").imageScale(.small) }
             }
         } footer: {
-            Text("Transparent by default. Turn the switch on to use your colors in Light and Dark mode. Reset turns it off.")
+            Text("Pick solid colors for the widget. Turn the switch on to use them in Light and Dark mode. Reset turns it off.")
         }
         .id(colorRefresh)
     }
@@ -209,7 +208,7 @@ struct ContentView: View {
 
     private var backgroundBinding: Binding<Color> {
         Binding(
-            get: { SharedSettings.editableColors(for: scheme).background?.color ?? .clear },
+            get: { SharedSettings.editableColors(for: scheme).background?.color ?? (scheme == .dark ? Color(white: 0.11) : .white) },
             set: { new in
                 SharedSettings.updateColors(for: scheme) { $0.background = RGBA(new) }
                 syncColorState()
@@ -258,18 +257,6 @@ struct ContentView: View {
     }
 
     // MARK: Data
-
-    /// First launch: ask for calendar access, then location (one prompt at a time).
-    private func askForPermissions() async {
-        if EKEventStore.authorizationStatus(for: .event) == .notDetermined {
-            _ = try? await store.requestFullAccessToEvents()
-            reload()
-            scheduleWidgetReload()
-        }
-        if location.status == .notDetermined {
-            location.request()
-        }
-    }
 
     private func reload() {
         status = EKEventStore.authorizationStatus(for: .event)

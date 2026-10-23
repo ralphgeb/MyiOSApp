@@ -241,7 +241,20 @@ struct CalendarWidgetView: View {
     }
 
     var body: some View {
-        if family == .accessoryRectangular {
+        if !entry.isPro && (family == .systemSmall || family == .systemMedium) {
+            // Small and medium widgets are part of the unlock.
+            VStack(spacing: 6) {
+                Image(systemName: "lock.fill").font(.title2)
+                Text("Unlock in the app").font(.system(size: 15, weight: .semibold))
+                Text("Settings → Unlock All Widgets")
+                    .font(.system(size: 12))
+                    .opacity(0.7)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .foregroundStyle(textColor)
+            .containerBackground(backgroundColor, for: .widget)
+        } else if family == .accessoryRectangular {
             lockScreen
                 .containerBackground(.clear, for: .widget)
         } else if family == .systemSmall {
@@ -550,11 +563,11 @@ struct NextEventLockView: View {
                 // Lines 1-2: time range and the whole title. Line 3: location.
                 let range = e.isAllDay ? "All day" : "\(clock(e.start))–\(clock(e.end))"
                 Text("\(Text(range).bold().monospacedDigit())  \(e.title)")
-                    .font(.system(size: 13))
+                    .font(.system(size: 15))
                     .lineLimit(2)
                 if let loc = e.location {
                     Text(loc)
-                        .font(.system(size: 12))
+                        .font(.system(size: 14))
                         .italic()
                         .lineLimit(1)
                         .opacity(0.85)

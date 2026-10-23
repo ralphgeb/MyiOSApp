@@ -110,7 +110,7 @@ struct PaywallView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Choose which calendars to show", systemImage: "calendar")
                     Label("Change background, text and highlight colors", systemImage: "paintpalette")
-                    Label("Use the Lock Screen widgets", systemImage: "lock.rectangle")
+                    Label("Use the small, medium and Lock Screen widgets", systemImage: "lock.rectangle")
                     Label("One payment, yours forever", systemImage: "checkmark.seal")
                 }
                 .font(.body)
@@ -118,7 +118,7 @@ struct PaywallView: View {
                 Spacer()
 
                 if store.isPro {
-                    Label("Unlocked. Thank you!", systemImage: "checkmark.circle.fill")
+                    Label("All widgets unlocked", systemImage: "checkmark.circle.fill")
                         .font(.headline)
                         .foregroundStyle(.green)
                 } else {
