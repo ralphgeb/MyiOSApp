@@ -161,7 +161,7 @@ struct ContentView: View {
 
     private var optionsSection: some View {
         Section {
-            locked(Stepper("Days Shown: \(daysAhead)", value: $daysAhead, in: 1...7)
+            locked(Stepper("Days Shown: \(purchase.isPro ? daysAhead : SharedSettings.freeDays)", value: $daysAhead, in: 1...7)
                 .onChange(of: daysAhead) { _, new in
                     SharedSettings.daysAhead = new
                     scheduleWidgetReload()

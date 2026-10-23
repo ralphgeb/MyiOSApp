@@ -31,6 +31,9 @@ enum SharedSettings {
     static let widgetKind = "CalendarListWidget"
     static let nextEventKind = "NextEventLockWidget"
 
+    /// Days the widget shows until the unlock is bought.
+    static let freeDays = 3
+
     /// Refresh every widget this app offers (battery: only these two kinds, never "all").
     static func reloadWidgets() {
         WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)

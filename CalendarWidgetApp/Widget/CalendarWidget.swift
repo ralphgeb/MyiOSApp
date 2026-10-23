@@ -121,7 +121,7 @@ struct Provider: TimelineProvider {
 
         let cal = Calendar.current
         let startOfToday = cal.startOfDay(for: .now)
-        guard let end = cal.date(byAdding: .day, value: SharedSettings.isPro ? SharedSettings.daysAhead : 4, to: startOfToday) else { return [] }
+        guard let end = cal.date(byAdding: .day, value: SharedSettings.isPro ? SharedSettings.daysAhead : SharedSettings.freeDays, to: startOfToday) else { return [] }
 
         // Only the calendars the user left switched on in the app.
         let hidden = SharedSettings.isPro ? SharedSettings.hiddenCalendarIDs : []
