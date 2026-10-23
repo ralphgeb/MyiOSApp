@@ -235,11 +235,63 @@ struct CalendarWidgetView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            content(height: geo.size.height)
+        if family == .accessoryRectangular {
+            lockScreen
+                .containerBackground(.clear, for: .widget)
+        } else {
+            GeometryReader { geo in
+                content(height: geo.size.height)
+            }
+            .foregroundStyle(textColor)
+            .containerBackground(backgroundColor, for: .widget)
         }
-        .foregroundStyle(textColor)
-        .containerBackground(backgroundColor, for: .widget)
+    }
+
+    // MARK: Lock Screen (rectangular): the next three events today, or the next day's events
+
+    private var lockScreen: some View {
+        let cal = Calendar.current
+        let now = entry.date
+        let upcoming = entry.events.filter { $0.end > now }
+        // Events still to come today (including one that is on right now).
+        let today = upcoming.filter { cal.isDate($0.start, inSameDayAs: now) || $0.start < now }
+        let nextDay = upcoming.first.map { cal.startOfDay(for: $0.start) }
+        let nextDayEvents = upcoming.filter { nextDay != nil && cal.isDate($0.start, inSameDayAs: nextDay!) }
+
+        return VStack(alignment: .leading, spacing: 1) {
+            if !SharedSettings.isPro {
+                Label("Unlock in the app", systemImage: "lock.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Lock Screen widget is part of the unlock")
+                    .font(.system(size: 11))
+                    .opacity(0.7)
+                    .lineLimit(2)
+            } else if !today.isEmpty {
+                ForEach(Array(today.prefix(3)), id: \.id) { lockLine($0, now: now) }
+            } else if let day = nextDay {
+                // Nothing left today: first line is the date of the next day with events.
+                Text(day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                    .font(.system(size: 13, weight: .bold))
+                    .widgetAccentable()
+                ForEach(Array(nextDayEvents.prefix(2)), id: \.id) { lockLine($0, now: now) }
+            } else {
+                Text("No upcoming events")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func lockLine(_ e: CalEvent, now: Date) -> some View {
+        let active = !e.isAllDay && e.start <= now && e.end > now
+        return HStack(spacing: 5) {
+            Text(e.isAllDay ? "All day" : clock(e.start))
+                .font(.system(size: 13, weight: .bold))
+                .monospacedDigit()
+            Text(e.title)
+                .font(.system(size: 13, weight: active ? .semibold : .regular))
+                .lineLimit(1)
+        }
     }
 
     @ViewBuilder
@@ -395,7 +447,7 @@ struct CalendarListWidget: Widget {
     let kind = SharedSettings.widgetKind
 
     static var families: [WidgetFamily] {
-        var f: [WidgetFamily] = [.systemMedium, .systemLarge, .systemExtraLarge]
+        var f: [WidgetFamily] = [.systemMedium, .systemLarge, .systemExtraLarge, .accessoryRectangular]
         #if compiler(>=6.4)
         if #available(iOS 27, *) { f.append(.systemExtraLargePortrait) }
         #endif
