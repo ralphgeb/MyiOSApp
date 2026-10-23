@@ -35,10 +35,12 @@ struct CalEvent: Identifiable {
 enum Row: Identifiable {
     case header(Date)
     case event(CalEvent)
+    case endOfDay(Date)        // hairline closing a day whose next day didn't fit on this page
 
     var id: String {
         switch self {
         case .header(let d): return "h-\(d.timeIntervalSince1970)"
+        case .endOfDay(let d): return "end-\(d.timeIntervalSince1970)"
         case .event(let e): return "e-\(e.id)-\(e.start.timeIntervalSince1970)"
         }
     }
@@ -169,18 +171,23 @@ struct CalendarWidgetView: View {
 
     /// Approximate on-screen heights (points) used to decide how many rows fit.
     private enum Cost {
-        static let event: CGFloat = 36          // two lines + spacing
+        static let event: CGFloat = 35          // two lines + spacing
+        static let allDay: CGFloat = 22         // one line
+        static let endRule: CGFloat = Layout.dayGap / 2 + 2
         static let header: CGFloat = 23         // "Fri 23 Oct"
         static let separator: CGFloat = Layout.dayGap + 2   // hairline and its padding
         static let pinnedHeader: CGFloat = 46 + Layout.headerGap
-        static let safety: CGFloat = 8
+        static let safety: CGFloat = 6
     }
 
     private var isMedium: Bool { family == .systemMedium }
 
     private func cost(_ row: Row, firstInChunk: Bool) -> CGFloat {
         switch row {
-        case .event: return isMedium ? 33 : Cost.event      // medium packs two events under the header
+        case .event(let e):
+            if e.isAllDay && e.location == nil { return Cost.allDay }
+            return isMedium ? 33 : Cost.event      // medium packs two events under the header
+        case .endOfDay: return Cost.endRule
         case .header: return Cost.header + (firstInChunk ? 0 : Cost.separator)
         }
     }
@@ -237,6 +244,13 @@ struct CalendarWidgetView: View {
             if case .header? = chunk.last, added > 1 {
                 chunk.removeLast()
                 i -= 1
+                used -= Cost.header
+            }
+            // The page ends exactly where a day ends and the next day didn't fit:
+            // close the day with a hairline so it's clear there's nothing more for it.
+            if i < all.count, case .header(let nextDay) = all[i], !chunk.isEmpty,
+               used + Cost.endRule <= capacity {
+                chunk.append(.endOfDay(nextDay))
             }
             result.append(chunk)
         }
@@ -487,6 +501,11 @@ struct CalendarWidgetView: View {
                 Text(day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
                     .font(.subheadline.bold())
             }
+        case .endOfDay:
+            Rectangle()
+                .fill(textColor.opacity(0.35))
+                .frame(height: 1 / displayScale)
+                .padding(.top, Layout.dayGap / 2)
         case .event(let e):
             let active = !e.isAllDay && e.start <= entry.date && e.end > entry.date
             // Two columns so the title and location line up:
@@ -496,8 +515,10 @@ struct CalendarWidgetView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(e.isAllDay ? "All day" : clock(e.start))
                         .font(.system(size: 14, weight: .bold))
-                    Text(e.isAllDay ? " " : clock(e.end))
-                        .font(.system(size: 12, weight: .regular))
+                    if !(e.isAllDay && e.location == nil) {
+                        Text(e.isAllDay ? " " : clock(e.end))
+                            .font(.system(size: 12, weight: .regular))
+                    }
                 }
                 .fontWidth(.condensed)   // narrower letterforms (iOS 16.4+)
                 .monospacedDigit()
@@ -506,10 +527,12 @@ struct CalendarWidgetView: View {
                     Text(e.title)
                         .font(.system(size: 14, weight: .medium))
                         .lineLimit(1)
-                    Text(e.location ?? " ")
-                        .font(.system(size: 12, weight: .light))
-                        .italic()
-                        .lineLimit(1)
+                    if !e.isAllDay || e.location != nil {
+                        Text(e.location ?? " ")
+                            .font(.system(size: 12, weight: .light))
+                            .italic()
+                            .lineLimit(1)
+                    }
                 }
             }
             .foregroundStyle(active ? highlightColor : textColor)

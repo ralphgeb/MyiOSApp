@@ -30,6 +30,10 @@ struct CalendarTabView: View {
     private var colors: SharedSettings.ColorSet {
         SharedSettings.isPro ? SharedSettings.colorSettings.resolved(for: scheme) : SharedSettings.ColorSet()
     }
+    /// Dark grey like the widget in Dark mode (not black); the system background in Light mode.
+    private var pageBackground: Color {
+        colors.background?.color ?? (scheme == .dark ? Color(red: 0.11, green: 0.11, blue: 0.118) : Color(.systemBackground))
+    }
     private var textColor: Color { colors.text?.color ?? .primary }
 
     private var highlight: Color {
@@ -132,7 +136,7 @@ struct CalendarTabView: View {
         }
         .scrollIndicators(.hidden)
         .foregroundStyle(textColor)
-        .background { if let bg = colors.background { bg.color.ignoresSafeArea() } }
+        .background { pageBackground.ignoresSafeArea() }
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .refreshable { load() }
     }
@@ -155,7 +159,7 @@ struct CalendarTabView: View {
         .padding(.top, 6)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(colors.background.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(.bar))
+        .background(pageBackground)
     }
 
     private func clock(_ d: Date) -> String {
