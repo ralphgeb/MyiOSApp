@@ -110,7 +110,7 @@ struct PaywallView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Choose which calendars to show", systemImage: "calendar")
                     Label("Change background, text and highlight colors", systemImage: "paintpalette")
-                    Label("Use the small, medium and Lock Screen widgets", systemImage: "lock.rectangle")
+                    Label("Use the medium, extra large and Lock Screen widgets", systemImage: "lock.rectangle")
                     Label("One payment, yours forever", systemImage: "checkmark.seal")
                 }
                 .font(.body)

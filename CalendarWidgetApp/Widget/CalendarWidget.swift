@@ -36,11 +36,13 @@ enum Row: Identifiable {
     case header(Date)
     case event(CalEvent)
     case endOfDay(Date)        // hairline closing a day whose next day didn't fit on this page
+    case peek(CalEvent)        // only the first line of an event, to fill leftover space at the bottom
 
     var id: String {
         switch self {
         case .header(let d): return "h-\(d.timeIntervalSince1970)"
         case .endOfDay(let d): return "end-\(d.timeIntervalSince1970)"
+        case .peek(let e): return "p-\(e.id)-\(e.start.timeIntervalSince1970)"
         case .event(let e): return "e-\(e.id)-\(e.start.timeIntervalSince1970)"
         }
     }
@@ -173,6 +175,7 @@ struct CalendarWidgetView: View {
     private enum Cost {
         static let event: CGFloat = 35          // two lines + spacing
         static let allDay: CGFloat = 22         // one line
+        static let peek: CGFloat = 18           // first line of an event only
         static let endRule: CGFloat = Layout.dayGap / 2 + 2
         static let header: CGFloat = 23         // "Fri 23 Oct"
         static let separator: CGFloat = Layout.dayGap + 2   // hairline and its padding
@@ -188,6 +191,7 @@ struct CalendarWidgetView: View {
             if e.isAllDay && e.location == nil { return Cost.allDay }
             return isMedium ? 33 : Cost.event      // medium packs two events under the header
         case .endOfDay: return Cost.endRule
+        case .peek: return Cost.peek
         case .header: return Cost.header + (firstInChunk ? 0 : Cost.separator)
         }
     }
@@ -220,6 +224,11 @@ struct CalendarWidgetView: View {
     /// Splits the rows into column-sized chunks. A chunk never ends on a lonely date header
     /// (that day moves to the next chunk), and a chunk that starts part-way through a day
     /// gets that day's header re-added on top. One chunk per page, or two on the XL widget.
+    private func chunkEndsWithPreview(_ chunk: [Row]) -> Bool {
+        if case .peek? = chunk.last { return true }
+        return false
+    }
+
     private func chunks(fitting height: CGFloat) -> [[Row]] {
         let capacity = max(Cost.event, height - Cost.pinnedHeader - (isMedium ? 0 : Cost.safety))
         let all = rows
@@ -241,15 +250,36 @@ struct CalendarWidgetView: View {
                 added += 1
                 i += 1
             }
+            // Leftover space at the bottom: fill it with the first line of the next event
+            // (and the next day's heading if that event starts a new day), so there is no big gap.
+            // The next page still starts with that event in full.
+            var remaining = capacity - used
             if case .header? = chunk.last, added > 1 {
-                chunk.removeLast()
-                i -= 1
-                used -= Cost.header
+                // A day heading fit but its first event didn't.
+                if i < all.count, case .event(let e) = all[i], remaining >= Cost.peek {
+                    chunk.append(.peek(e))
+                } else {
+                    chunk.removeLast()
+                    i -= 1
+                    used -= Cost.header
+                    remaining = capacity - used
+                }
+            } else if i < all.count, !chunk.isEmpty {
+                switch all[i] {
+                case .event(let e):
+                    if remaining >= Cost.peek { chunk.append(.peek(e)) }
+                case .header(let nextDay):
+                    if i + 1 < all.count, case .event(let e) = all[i + 1],
+                       remaining >= Cost.header + Cost.separator + Cost.peek {
+                        chunk.append(.header(nextDay))
+                        chunk.append(.peek(e))
+                    }
+                default: break
+                }
             }
-            // The page ends exactly where a day ends and the next day didn't fit:
-            // close the day with a hairline so it's clear there's nothing more for it.
+            // Nothing could be added and the day is over: close it with a hairline.
             if i < all.count, case .header(let nextDay) = all[i], !chunk.isEmpty,
-               used + Cost.endRule <= capacity {
+               !chunkEndsWithPreview(chunk), remaining >= Cost.endRule {
                 chunk.append(.endOfDay(nextDay))
             }
             result.append(chunk)
@@ -258,8 +288,8 @@ struct CalendarWidgetView: View {
     }
 
     var body: some View {
-        if !entry.isPro && (family == .systemSmall || family == .systemMedium) {
-            // Small and medium widgets are part of the unlock.
+        if !entry.isPro && family != .systemSmall && family != .systemLarge && family != .accessoryRectangular {
+            // Only the small (2x2) and large (4x4) widgets are free; every other size is part of the unlock.
             VStack(spacing: 6) {
                 Image(systemName: "lock.fill").font(.title2)
                 Text("Unlock in the app").font(.system(size: 15, weight: .semibold))
@@ -506,7 +536,8 @@ struct CalendarWidgetView: View {
                 .fill(textColor.opacity(0.35))
                 .frame(height: 1 / displayScale)
                 .padding(.top, Layout.dayGap / 2)
-        case .event(let e):
+        case .event(let e), .peek(let e):
+            let isPeek: Bool = { if case .peek = row { return true }; return false }()
             let active = !e.isAllDay && e.start <= entry.date && e.end > entry.date
             // Two columns so the title and location line up:
             //   15:30  Stand-up
@@ -515,7 +546,7 @@ struct CalendarWidgetView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(e.isAllDay ? "All day" : clock(e.start))
                         .font(.system(size: 14, weight: .bold))
-                    if !(e.isAllDay && e.location == nil) {
+                    if !isPeek && !(e.isAllDay && e.location == nil) {
                         Text(e.isAllDay ? " " : clock(e.end))
                             .font(.system(size: 12, weight: .regular))
                     }
@@ -527,7 +558,7 @@ struct CalendarWidgetView: View {
                     Text(e.title)
                         .font(.system(size: 14, weight: .medium))
                         .lineLimit(1)
-                    if !e.isAllDay || e.location != nil {
+                    if !isPeek && (!e.isAllDay || e.location != nil) {
                         Text(e.location ?? " ")
                             .font(.system(size: 12, weight: .light))
                             .italic()

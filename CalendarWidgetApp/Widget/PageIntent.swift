@@ -15,21 +15,39 @@ enum Pager {
         set { defaults.set(newValue >= 0 ? 1 : -1, forKey: "pageDirection") }
     }
 
-    private static let familyKey = "pageFamily"
+    private static func pageKey(_ f: String) -> String { "page_\(f)" }
+    private static func touchedKey(_ f: String) -> String { "touched_\(f)" }
 
-    /// The page for this widget size. A different size always starts on page 1, so changing
-    /// the widget's size never leaves it on a later page. Also resets after 15 idle minutes.
+    /// The page for this widget size.
+    /// - A size you switch to always starts on page 1 (resizing a widget resets it).
+    /// - Two sizes on screen at once refresh together, so they don't reset each other:
+    ///   a switch only counts when the other size hasn't been refreshed for 5 seconds.
+    /// - Also goes back to page 1 after 15 idle minutes.
     static func page(for family: WidgetFamily) -> Int {
-        guard defaults.string(forKey: familyKey) == "\(family)" else { return 0 }
-        let touched = defaults.double(forKey: touchedKey)
-        guard touched > 0, Date().timeIntervalSince1970 - touched < 15 * 60 else { return 0 }
-        return max(0, defaults.integer(forKey: pageKey))
+        let f = "\(family)"
+        let now = Date().timeIntervalSince1970
+        let active = defaults.string(forKey: "pageActiveFamily")
+        let seen = defaults.double(forKey: "pageActiveSeen")
+        if active != f && now - seen > 5 {
+            defaults.set(0, forKey: pageKey(f))
+            defaults.set(0.0, forKey: touchedKey(f))
+            defaults.set(f, forKey: "pageActiveFamily")
+        }
+        if defaults.string(forKey: "pageActiveFamily") == f { defaults.set(now, forKey: "pageActiveSeen") }
+
+        let touched = defaults.double(forKey: touchedKey(f))
+        guard touched > 0, now - touched < 15 * 60 else { return 0 }
+        return max(0, defaults.integer(forKey: pageKey(f)))
     }
 
+    static func currentPage(for family: String) -> Int { max(0, defaults.integer(forKey: pageKey(family))) }
+
     static func set(page: Int, for family: String) {
-        defaults.set(max(0, page), forKey: pageKey)
-        defaults.set(family, forKey: familyKey)
-        defaults.set(Date().timeIntervalSince1970, forKey: touchedKey)
+        let now = Date().timeIntervalSince1970
+        defaults.set(max(0, page), forKey: pageKey(family))
+        defaults.set(now, forKey: touchedKey(family))
+        defaults.set(family, forKey: "pageActiveFamily")
+        defaults.set(now, forKey: "pageActiveSeen")
     }
 }
 
@@ -44,10 +62,8 @@ struct PageIntent: AppIntent {
     init() {}
     init(target: Int, family: String) { self.target = target; self.family = family }
 
-    private var currentPage: Int { max(0, Pager.defaults.integer(forKey: "pageIndex")) }
-
     func perform() async throws -> some IntentResult {
-        Pager.direction = target >= currentPage ? 1 : -1
+        Pager.direction = target >= Pager.currentPage(for: family) ? 1 : -1
         Pager.set(page: target, for: family)
         WidgetCenter.shared.reloadTimelines(ofKind: CalendarListWidget.kind)
         return .result()
