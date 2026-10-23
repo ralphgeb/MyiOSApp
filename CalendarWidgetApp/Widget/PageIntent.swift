@@ -15,16 +15,21 @@ enum Pager {
         set { defaults.set(newValue >= 0 ? 1 : -1, forKey: "pageDirection") }
     }
 
-    static var page: Int {
-        get {
-            let touched = defaults.double(forKey: touchedKey)
-            guard touched > 0, Date().timeIntervalSince1970 - touched < 15 * 60 else { return 0 }
-            return max(0, defaults.integer(forKey: pageKey))
-        }
-        set {
-            defaults.set(max(0, newValue), forKey: pageKey)
-            defaults.set(Date().timeIntervalSince1970, forKey: touchedKey)
-        }
+    private static let familyKey = "pageFamily"
+
+    /// The page for this widget size. A different size always starts on page 1, so changing
+    /// the widget's size never leaves it on a later page. Also resets after 15 idle minutes.
+    static func page(for family: WidgetFamily) -> Int {
+        guard defaults.string(forKey: familyKey) == "\(family)" else { return 0 }
+        let touched = defaults.double(forKey: touchedKey)
+        guard touched > 0, Date().timeIntervalSince1970 - touched < 15 * 60 else { return 0 }
+        return max(0, defaults.integer(forKey: pageKey))
+    }
+
+    static func set(page: Int, for family: String) {
+        defaults.set(max(0, page), forKey: pageKey)
+        defaults.set(family, forKey: familyKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: touchedKey)
     }
 }
 
@@ -34,13 +39,16 @@ struct PageIntent: AppIntent {
     static var title: LocalizedStringResource = "Show page"
 
     @Parameter(title: "Page") var target: Int
+    @Parameter(title: "Size") var family: String
 
     init() {}
-    init(target: Int) { self.target = target }
+    init(target: Int, family: String) { self.target = target; self.family = family }
+
+    private var currentPage: Int { max(0, Pager.defaults.integer(forKey: "pageIndex")) }
 
     func perform() async throws -> some IntentResult {
-        Pager.direction = target >= Pager.page ? 1 : -1
-        Pager.page = target
+        Pager.direction = target >= currentPage ? 1 : -1
+        Pager.set(page: target, for: family)
         WidgetCenter.shared.reloadTimelines(ofKind: CalendarListWidget.kind)
         return .result()
     }

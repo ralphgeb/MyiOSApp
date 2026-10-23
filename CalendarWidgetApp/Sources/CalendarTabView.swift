@@ -22,9 +22,15 @@ struct CalendarTabView: View {
     @Environment(\.displayScale) private var displayScale
     @State private var events: [AppEvent] = []
     @State private var now = Date()
+    @State private var colorTick = 0     // bumped on appear so colour changes from Settings show up
     @State private var status = EKEventStore.authorizationStatus(for: .event)
 
     // MARK: Data
+
+    private var colors: SharedSettings.ColorSet {
+        SharedSettings.isPro ? SharedSettings.colorSettings.resolved(for: scheme) : SharedSettings.ColorSet()
+    }
+    private var textColor: Color { colors.text?.color ?? .primary }
 
     private var highlight: Color {
         guard SharedSettings.isPro else { return .orange }
@@ -72,8 +78,9 @@ struct CalendarTabView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .onAppear(perform: load)
+        .onAppear { colorTick += 1; load() }
         .onReceive(tick) { now = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: .weatherUpdated)) { _ in now = Date() }
         .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in load() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { load() } }
     }
@@ -100,7 +107,7 @@ struct CalendarTabView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if all.first.map({ !cal.isDate($0.day, inSameDayAs: now) }) ?? true {
                     Text(all.isEmpty ? "No upcoming events" : "No more events today")
-                        .font(.system(size: 14))
+                        .font(.system(size: 15.5))
                         .foregroundStyle(.secondary)
                         .padding(.bottom, 6)
                 }
@@ -108,22 +115,24 @@ struct CalendarTabView: View {
                     if !cal.isDate(group.day, inSameDayAs: now) {
                         if index > 0 {
                             Rectangle()
-                                .fill(Color.primary.opacity(0.25))
+                                .fill(textColor.opacity(0.25))
                                 .frame(height: 1 / displayScale)
                                 .padding(.vertical, 10)
                         }
                         Text(group.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 15.5, weight: .bold))
                             .padding(.bottom, 3)
                     }
                     ForEach(group.events) { row($0) }
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 15)
             .padding(.top, 3)
             .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
+        .foregroundStyle(textColor)
+        .background { if let bg = colors.background { bg.color.ignoresSafeArea() } }
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .refreshable { load() }
     }
@@ -133,20 +142,20 @@ struct CalendarTabView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: -5) {
                 Text(now.formatted(.dateTime.weekday(.wide)))
-                    .font(.system(size: 21, weight: .bold))
+                    .font(.system(size: 23, weight: .bold))
                 Text(now.formatted(.dateTime.day().month(.wide)))
-                    .font(.system(size: 29, weight: .thin))
+                    .font(.system(size: 32, weight: .thin))
             }
             Spacer()
             if let snap = SharedSettings.weather, Date().timeIntervalSince(snap.fetched) < 3 * 3600 {
-                WeatherIconView(name: snap.iconName, color: .primary, size: 39)
+                WeatherIconView(name: snap.iconName, color: textColor, size: 43)
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 15)
         .padding(.top, 6)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.bar)
+        .background(colors.background.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(.bar))
     }
 
     private func clock(_ d: Date) -> String {
@@ -155,29 +164,29 @@ struct CalendarTabView: View {
 
     private func row(_ e: AppEvent) -> some View {
         let active = !e.isAllDay && e.start <= now && e.end > now
-        return HStack(alignment: .top, spacing: 10) {
+        return HStack(alignment: .top, spacing: 11) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(e.isAllDay ? "All day" : clock(e.start))
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14.5, weight: .bold))
                 Text(e.isAllDay ? " " : clock(e.end))
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 11.5))
             }
             .fontWidth(.condensed)
             .monospacedDigit()
-            .frame(width: 40, alignment: .leading)
+            .frame(width: 44, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(e.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 14.5, weight: .medium))
                     .lineLimit(2)
                 Text(e.location ?? " ")
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 11.5))
                     .italic()
                     .lineLimit(1)
                     .opacity(0.85)
             }
         }
-        .foregroundStyle(active ? highlight : Color.primary)
+        .foregroundStyle(active ? highlight : textColor)
         .padding(.vertical, 4)
     }
 }
@@ -185,7 +194,7 @@ struct CalendarTabView: View {
 /// Two tabs: Calendar and Settings. Also asks for permissions the first time the app opens.
 struct RootView: View {
     private let store = EKEventStore()
-    @StateObject private var location = LocationAccess()
+    @EnvironmentObject private var location: LocationAccess
 
     var body: some View {
         TabView {

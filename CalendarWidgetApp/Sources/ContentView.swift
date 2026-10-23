@@ -17,7 +17,7 @@ struct ContentView: View {
     @State private var hasCustomColors = SharedSettings.hasCustomColors
     @State private var colorRefresh = 0          // bumped to redraw the colour pickers
     @State private var pendingReload: Task<Void, Never>?
-    @StateObject private var location = LocationAccess()
+    @EnvironmentObject private var location: LocationAccess
     @StateObject private var purchase = Store()
     @State private var showPaywall = false
 
@@ -200,7 +200,7 @@ struct ContentView: View {
         } header: {
             Text("Weather")
         } footer: {
-            Text("Shows the weather where you are, as an icon at the top of the widget. It updates once an hour.")
+            Text("Shows the weather where you are, as an icon at the top of the widget. Choose \"Allow While Using App\" (not \"Allow Once\"). It updates once an hour.")
         }
     }
 
@@ -271,7 +271,7 @@ struct ContentView: View {
     private func scheduleWidgetReload() {
         pendingReload?.cancel()
         pendingReload = Task {
-            try? await Task.sleep(nanoseconds: 700_000_000)
+            try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             SharedSettings.reloadWidgets()
         }
@@ -363,17 +363,23 @@ final class LocationAccess: NSObject, ObservableObject, CLLocationManagerDelegat
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
-        let previous = SharedSettings.lastCoordinate
         SharedSettings.lastCoordinate = SharedSettings.Coordinate(lat: loc.coordinate.latitude,
                                                                   lon: loc.coordinate.longitude)
-        // Battery: only refresh the widget if this is the first fix or you've moved over 5 km.
-        let moved = previous.map {
-            CLLocation(latitude: $0.lat, longitude: $0.lon).distance(from: loc) > 5000
-        } ?? true
-        if moved {
-            SharedSettings.reloadWidgets()
+        // Fetch the weather right away (instead of waiting for the widget's own refresh) so the
+        // icon appears as soon as location is allowed. Skipped if the saved weather is under 10 minutes old.
+        if let saved = SharedSettings.weather, Date().timeIntervalSince(saved.fetched) < 10 * 60 { return }
+        Task {
+            if let fresh = await WeatherFetcher.fetch(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) {
+                SharedSettings.weather = fresh
+                SharedSettings.reloadWidgets()
+                NotificationCenter.default.post(name: .weatherUpdated, object: nil)
+            }
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+}
+
+extension Notification.Name {
+    static let weatherUpdated = Notification.Name("weatherUpdated")
 }

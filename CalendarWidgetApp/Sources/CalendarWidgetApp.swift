@@ -6,6 +6,7 @@ import WidgetKit
 @main
 struct CalendarWidgetApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var location = LocationAccess()
     private static let refreshID = "com.ralphgeb.calendarwidgetapp.refresh"
 
     init() {
@@ -21,6 +22,7 @@ struct CalendarWidgetApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environmentObject(location)
                 // Calendar changed while the app is open: refresh the widget straight away.
                 .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
                     SharedSettings.reloadWidgets()
@@ -30,8 +32,10 @@ struct CalendarWidgetApp: App {
             switch phase {
             case .active:
                 SharedSettings.reloadWidgets()
-            case .background:
-                Self.scheduleRefresh()
+            case .inactive, .background:
+                // Changes made in Settings reach the widget even if you leave the app quickly.
+                SharedSettings.reloadWidgets()
+                if phase == .background { Self.scheduleRefresh() }
             default: break
             }
         }

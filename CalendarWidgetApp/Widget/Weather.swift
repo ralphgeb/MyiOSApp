@@ -4,14 +4,6 @@ import CoreLocation
 /// Current weather for where the user is, using the free Open-Meteo service
 /// (no account or key needed). Results are cached in the App Group.
 enum WeatherProvider {
-    private struct Response: Decodable {
-        struct Current: Decodable {
-            let weather_code: Int
-            let is_day: Int
-        }
-        let current: Current
-    }
-
     static func current() async -> SharedSettings.WeatherSnapshot? {
         let cached = SharedSettings.weather
         // Weather updates once an hour: reuse the saved value until it is 60 minutes old.
@@ -20,7 +12,7 @@ enum WeatherProvider {
         }
 
         if let coord = await LocationProvider.coordinate(),
-           let fresh = await fetch(lat: coord.lat, lon: coord.lon) {
+           let fresh = await WeatherFetcher.fetch(lat: coord.lat, lon: coord.lon) {
             SharedSettings.weather = fresh
             return fresh
         }
@@ -28,28 +20,6 @@ enum WeatherProvider {
         // Offline or no location: keep showing a recent value rather than nothing.
         if let cached, Date().timeIntervalSince(cached.fetched) < 3 * 3600 { return cached }
         return nil
-    }
-
-    private static func fetch(lat: Double, lon: Double) async -> SharedSettings.WeatherSnapshot? {
-        var comps = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
-        comps.queryItems = [
-            URLQueryItem(name: "latitude", value: String(format: "%.3f", lat)),
-            URLQueryItem(name: "longitude", value: String(format: "%.3f", lon)),
-            URLQueryItem(name: "current", value: "weather_code,is_day"),
-        ]
-        guard let url = comps.url else { return nil }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 8
-
-        do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let r = try JSONDecoder().decode(Response.self, from: data)
-            return SharedSettings.WeatherSnapshot(code: r.current.weather_code,
-                                                  isDay: r.current.is_day == 1,
-                                                  fetched: Date())
-        } catch {
-            return nil
-        }
     }
 }
 

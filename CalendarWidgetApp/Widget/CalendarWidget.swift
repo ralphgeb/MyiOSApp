@@ -61,14 +61,14 @@ struct Provider: TimelineProvider {
     var includeWeather = true      // the Lock Screen widget doesn't need weather
 
     func placeholder(in context: Context) -> CalendarEntry {
-        makeEntry(date: .now, events: Self.sample, weather: nil, preview: true)
+        makeEntry(date: .now, events: Self.sample, weather: nil, preview: true, family: context.family)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (CalendarEntry) -> Void) {
         let events = context.isPreview ? Self.sample : fetchEvents()
         completion(makeEntry(date: .now, events: events,
                              weather: includeWeather ? SharedSettings.weather : nil,
-                             preview: context.isPreview))
+                             preview: context.isPreview, family: context.family))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CalendarEntry>) -> Void) {
@@ -91,17 +91,18 @@ struct Provider: TimelineProvider {
                 times.insert(midnight)
             }
             let entries = times.sorted().prefix(16).map {
-                makeEntry(date: $0, events: events, weather: weather)
+                makeEntry(date: $0, events: events, weather: weather, family: context.family)
             }
             completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60))))
         }
     }
 
     private func makeEntry(date: Date, events: [CalEvent], weather: SharedSettings.WeatherSnapshot?,
-                           preview: Bool = false) -> CalendarEntry {
+                           preview: Bool = false,
+                           family: WidgetFamily) -> CalendarEntry {
         CalendarEntry(date: date,
                       events: events,
-                      page: Pager.page,
+                      page: Pager.page(for: family),
                       direction: Pager.direction,
                       weatherIcon: weather?.iconName,
                       colors: SharedSettings.isPro
@@ -179,7 +180,7 @@ struct CalendarWidgetView: View {
 
     private func cost(_ row: Row, firstInChunk: Bool) -> CGFloat {
         switch row {
-        case .event: return Cost.event
+        case .event: return isMedium ? 33 : Cost.event      // medium packs two events under the header
         case .header: return Cost.header + (firstInChunk ? 0 : Cost.separator)
         }
     }
@@ -213,8 +214,7 @@ struct CalendarWidgetView: View {
     /// (that day moves to the next chunk), and a chunk that starts part-way through a day
     /// gets that day's header re-added on top. One chunk per page, or two on the XL widget.
     private func chunks(fitting height: CGFloat) -> [[Row]] {
-        let header = isMedium ? 42 : Cost.pinnedHeader
-        let capacity = max(Cost.event, height - header - (isMedium ? 2 : Cost.safety))
+        let capacity = max(Cost.event, height - Cost.pinnedHeader - (isMedium ? 0 : Cost.safety))
         let all = rows
         var result: [[Row]] = []
         var i = 0
@@ -385,7 +385,7 @@ struct CalendarWidgetView: View {
         HStack(alignment: .top, spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
                 pinnedHeader
-                    .padding(.bottom, isMedium ? 4 : Layout.headerGap)
+                    .padding(.bottom, Layout.headerGap)
 
                 if rows.isEmpty {
                     Text("No events to show")
@@ -416,7 +416,7 @@ struct CalendarWidgetView: View {
                 // invisible tap zone: the full strip height (upper half = up, lower half = down)
                 // and 44 pt wide. Negative padding keeps the arrow column's layout width unchanged.
                 VStack(spacing: 0) {
-                    Button(intent: PageIntent(target: pageIndex - 1)) {
+                    Button(intent: PageIntent(target: pageIndex - 1, family: "\(family)")) {
                         Image(systemName: "chevron.up")
                             .opacity(canPageUp ? 1 : 0.3)
                             .frame(width: 44, alignment: .center)
@@ -424,7 +424,7 @@ struct CalendarWidgetView: View {
                             .contentShape(Rectangle())
                     }
                     .disabled(!canPageUp)
-                    Button(intent: PageIntent(target: pageIndex + 1)) {
+                    Button(intent: PageIntent(target: pageIndex + 1, family: "\(family)")) {
                         Image(systemName: "chevron.down")
                             .opacity(canPageDown ? 1 : 0.3)
                             .frame(width: 44, alignment: .center)
@@ -450,9 +450,9 @@ struct CalendarWidgetView: View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: Layout.dateLineSpacing) {
                 Text(entry.date.formatted(.dateTime.weekday(.wide)))
-                    .font(.system(size: isMedium ? 16 : 18, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                 Text(entry.date.formatted(.dateTime.day().month(.wide)))
-                    .font(.system(size: isMedium ? 20 : 24, weight: .thin))
+                    .font(.system(size: 24, weight: .thin))
             }
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -460,7 +460,7 @@ struct CalendarWidgetView: View {
             Spacer(minLength: 0)
 
             if let icon = entry.weatherIcon {
-                WeatherIconView(name: icon, color: textColor, size: isMedium ? 32 : 40)
+                WeatherIconView(name: icon, color: textColor, size: 40)
             }
         }
     }
