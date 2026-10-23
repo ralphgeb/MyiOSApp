@@ -86,7 +86,7 @@ struct ContentView: View {
     private var unlockSection: some View {
         Section {
             if purchase.isPro {
-                Label("All widgets unlocked", systemImage: "checkmark.seal.fill")
+                Label("All widgets and settings unlocked", systemImage: "checkmark.seal.fill")
                     .foregroundStyle(.green)
             } else {
                 Button { showPaywall = true } label: {

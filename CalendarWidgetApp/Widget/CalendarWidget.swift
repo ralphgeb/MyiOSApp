@@ -175,6 +175,8 @@ struct CalendarWidgetView: View {
         static let safety: CGFloat = 8
     }
 
+    private var isMedium: Bool { family == .systemMedium }
+
     private func cost(_ row: Row, firstInChunk: Bool) -> CGFloat {
         switch row {
         case .event: return Cost.event
@@ -211,7 +213,8 @@ struct CalendarWidgetView: View {
     /// (that day moves to the next chunk), and a chunk that starts part-way through a day
     /// gets that day's header re-added on top. One chunk per page, or two on the XL widget.
     private func chunks(fitting height: CGFloat) -> [[Row]] {
-        let capacity = max(Cost.event, height - Cost.pinnedHeader - Cost.safety)
+        let header = isMedium ? 42 : Cost.pinnedHeader
+        let capacity = max(Cost.event, height - header - (isMedium ? 2 : Cost.safety))
         let all = rows
         var result: [[Row]] = []
         var i = 0
@@ -382,7 +385,7 @@ struct CalendarWidgetView: View {
         HStack(alignment: .top, spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
                 pinnedHeader
-                    .padding(.bottom, Layout.headerGap)
+                    .padding(.bottom, isMedium ? 4 : Layout.headerGap)
 
                 if rows.isEmpty {
                     Text("No events to show")
@@ -447,9 +450,9 @@ struct CalendarWidgetView: View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: Layout.dateLineSpacing) {
                 Text(entry.date.formatted(.dateTime.weekday(.wide)))
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: isMedium ? 16 : 18, weight: .bold))
                 Text(entry.date.formatted(.dateTime.day().month(.wide)))
-                    .font(.system(size: 24, weight: .thin))
+                    .font(.system(size: isMedium ? 20 : 24, weight: .thin))
             }
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -457,7 +460,7 @@ struct CalendarWidgetView: View {
             Spacer(minLength: 0)
 
             if let icon = entry.weatherIcon {
-                WeatherIconView(name: icon, color: textColor, size: 40)
+                WeatherIconView(name: icon, color: textColor, size: isMedium ? 32 : 40)
             }
         }
     }

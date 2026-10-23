@@ -100,9 +100,9 @@ struct CalendarTabView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if all.first.map({ !cal.isDate($0.day, inSameDayAs: now) }) ?? true {
                     Text(all.isEmpty ? "No upcoming events" : "No more events today")
-                        .font(.title3)
+                        .font(.system(size: 14))
                         .foregroundStyle(.secondary)
-                        .padding(.bottom, 8)
+                        .padding(.bottom, 6)
                 }
                 ForEach(Array(all.enumerated()), id: \.element.day) { index, group in
                     if !cal.isDate(group.day, inSameDayAs: now) {
@@ -110,18 +110,18 @@ struct CalendarTabView: View {
                             Rectangle()
                                 .fill(Color.primary.opacity(0.25))
                                 .frame(height: 1 / displayScale)
-                                .padding(.vertical, 14)
+                                .padding(.vertical, 10)
                         }
                         Text(group.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                            .font(.title3.bold())
-                            .padding(.bottom, 4)
+                            .font(.system(size: 14, weight: .bold))
+                            .padding(.bottom, 3)
                     }
                     ForEach(group.events) { row($0) }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 14)
+            .padding(.top, 3)
+            .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .top, spacing: 0) { header }
@@ -131,20 +131,20 @@ struct CalendarTabView: View {
     /// Stays at the top while the events scroll underneath.
     private var header: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: -7) {
+            VStack(alignment: .leading, spacing: -5) {
                 Text(now.formatted(.dateTime.weekday(.wide)))
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.system(size: 21, weight: .bold))
                 Text(now.formatted(.dateTime.day().month(.wide)))
-                    .font(.system(size: 42, weight: .thin))
+                    .font(.system(size: 29, weight: .thin))
             }
             Spacer()
             if let snap = SharedSettings.weather, Date().timeIntervalSince(snap.fetched) < 3 * 3600 {
-                WeatherIconView(name: snap.iconName, color: .primary, size: 56)
+                WeatherIconView(name: snap.iconName, color: .primary, size: 39)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.bar)
     }
@@ -155,30 +155,30 @@ struct CalendarTabView: View {
 
     private func row(_ e: AppEvent) -> some View {
         let active = !e.isAllDay && e.start <= now && e.end > now
-        return HStack(alignment: .top, spacing: 14) {
+        return HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(e.isAllDay ? "All day" : clock(e.start))
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                 Text(e.isAllDay ? " " : clock(e.end))
-                    .font(.system(size: 15))
+                    .font(.system(size: 10.5))
             }
             .fontWidth(.condensed)
             .monospacedDigit()
-            .frame(width: 56, alignment: .leading)
+            .frame(width: 40, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(e.title)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .lineLimit(2)
                 Text(e.location ?? " ")
-                    .font(.system(size: 15))
+                    .font(.system(size: 10.5))
                     .italic()
                     .lineLimit(1)
                     .opacity(0.85)
             }
         }
         .foregroundStyle(active ? highlight : Color.primary)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
     }
 }
 

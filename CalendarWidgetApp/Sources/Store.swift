@@ -118,7 +118,7 @@ struct PaywallView: View {
                 Spacer()
 
                 if store.isPro {
-                    Label("All widgets unlocked", systemImage: "checkmark.circle.fill")
+                    Label("All widgets and settings unlocked", systemImage: "checkmark.circle.fill")
                         .font(.headline)
                         .foregroundStyle(.green)
                 } else {
