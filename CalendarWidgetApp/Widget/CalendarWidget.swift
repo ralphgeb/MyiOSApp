@@ -283,22 +283,33 @@ struct CalendarWidgetView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if canPageUp || canPageDown {
-                VStack(spacing: 8) {
+                // Arrows look and sit exactly where they were, but each one has a much bigger
+                // invisible tap zone: the full strip height (upper half = up, lower half = down)
+                // and 44 pt wide. Negative padding keeps the arrow column's layout width unchanged.
+                VStack(spacing: 0) {
                     Button(intent: PageIntent(target: pageIndex - 1)) {
                         Image(systemName: "chevron.up")
+                            .opacity(canPageUp ? 1 : 0.3)
+                            .frame(width: 44, alignment: .center)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .contentShape(Rectangle())
                     }
                     .disabled(!canPageUp)
-                    .opacity(canPageUp ? 1 : 0.3)
-                    Spacer(minLength: 0)
                     Button(intent: PageIntent(target: pageIndex + 1)) {
                         Image(systemName: "chevron.down")
+                            .opacity(canPageDown ? 1 : 0.3)
+                            .frame(width: 44, alignment: .center)
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                            .contentShape(Rectangle())
                     }
                     .disabled(!canPageDown)
-                    .opacity(canPageDown ? 1 : 0.3)
                 }
                 .buttonStyle(.plain)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(textColor.opacity(0.7))
+                .frame(width: 44)
+                .frame(maxHeight: .infinity)
+                .padding(.horizontal, -16)
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
