@@ -87,7 +87,7 @@ final class Store: ObservableObject {
         let changed = SharedSettings.isPro != value
         isPro = value
         SharedSettings.isPro = value
-        if changed { WidgetCenter.shared.reloadTimelines(ofKind: SharedSettings.widgetKind) }
+        if changed { SharedSettings.reloadWidgets() }
     }
 }
 
@@ -110,6 +110,7 @@ struct PaywallView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Choose which calendars to show", systemImage: "calendar")
                     Label("Change background, text and highlight colors", systemImage: "paintpalette")
+                    Label("Use the Lock Screen widgets", systemImage: "lock.rectangle")
                     Label("One payment, yours forever", systemImage: "checkmark.seal")
                 }
                 .font(.body)

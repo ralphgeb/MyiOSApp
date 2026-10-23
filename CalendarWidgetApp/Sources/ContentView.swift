@@ -33,6 +33,7 @@ struct ContentView: View {
             .navigationTitle("Calendar Widget")
             .navigationBarTitleDisplayMode(.inline)   // compact title instead of the large one
             .onAppear(perform: reload)
+            .task { await askForPermissions() }
             .sheet(isPresented: $showPaywall) { PaywallView(store: purchase) }
         }
     }
@@ -41,6 +42,7 @@ struct ContentView: View {
 
     private var settingsForm: some View {
         Form {
+            unlockSection
             calendarsSection
             customisationSection
             optionsSection
@@ -80,6 +82,26 @@ struct ContentView: View {
     }
 
     // MARK: Sections
+
+    /// One button that opens the unlock window (covers every widget and setting).
+    private var unlockSection: some View {
+        Section {
+            if purchase.isPro {
+                Label("All widgets unlocked", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Button { showPaywall = true } label: {
+                    HStack {
+                        Label("Unlock All Widgets", systemImage: "lock.open")
+                        Spacer()
+                        Text(purchase.product?.displayPrice ?? "£1.99").foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } footer: {
+            if !purchase.isPro { Text("One payment unlocks the Lock Screen widgets and all settings.") }
+        }
+    }
 
     /// One row that opens the list of calendar switches.
     private var calendarsSection: some View {
@@ -133,7 +155,7 @@ struct ContentView: View {
                 if !purchase.isPro { Image(systemName: "lock.fill").imageScale(.small) }
             }
         } footer: {
-            Text("The background is transparent by default. The highlight color marks the event happening now. Lower the opacity in the color picker to make it see-through. Once you change a color, turn on the switch to use your colors in both Light and Dark mode. When it's off, each mode keeps its own colors. Reset Colors turns it off again.")
+            Text("Transparent by default. Turn the switch on to use your colors in Light and Dark mode. Reset turns it off.")
         }
         .id(colorRefresh)
     }
@@ -237,6 +259,18 @@ struct ContentView: View {
 
     // MARK: Data
 
+    /// First launch: ask for calendar access, then location (one prompt at a time).
+    private func askForPermissions() async {
+        if EKEventStore.authorizationStatus(for: .event) == .notDetermined {
+            _ = try? await store.requestFullAccessToEvents()
+            reload()
+            scheduleWidgetReload()
+        }
+        if location.status == .notDetermined {
+            location.request()
+        }
+    }
+
     private func reload() {
         status = EKEventStore.authorizationStatus(for: .event)
         if status == .fullAccess {
@@ -252,7 +286,7 @@ struct ContentView: View {
         pendingReload = Task {
             try? await Task.sleep(nanoseconds: 700_000_000)
             guard !Task.isCancelled else { return }
-            WidgetCenter.shared.reloadTimelines(ofKind: SharedSettings.widgetKind)
+            SharedSettings.reloadWidgets()
         }
     }
 }
@@ -350,7 +384,7 @@ final class LocationAccess: NSObject, ObservableObject, CLLocationManagerDelegat
             CLLocation(latitude: $0.lat, longitude: $0.lon).distance(from: loc) > 5000
         } ?? true
         if moved {
-            WidgetCenter.shared.reloadTimelines(ofKind: SharedSettings.widgetKind)
+            SharedSettings.reloadWidgets()
         }
     }
 

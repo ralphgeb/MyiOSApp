@@ -51,26 +51,30 @@ struct CalendarEntry: TimelineEntry {
     let direction: Int                          // +1 slid down, -1 slid up (for the page animation)
     let weatherIcon: String?                    // custom icon name, nil = no weather yet
     let colors: SharedSettings.ColorSettings    // resolved for light/dark when drawing
+    let isPro: Bool                             // unlocked? (previews in the gallery always show content)
 }
 
 // MARK: - Provider
 
 struct Provider: TimelineProvider {
     private let store = EKEventStore()
+    var includeWeather = true      // the Lock Screen widget doesn't need weather
 
     func placeholder(in context: Context) -> CalendarEntry {
-        makeEntry(date: .now, events: Self.sample, weather: nil)
+        makeEntry(date: .now, events: Self.sample, weather: nil, preview: true)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (CalendarEntry) -> Void) {
         let events = context.isPreview ? Self.sample : fetchEvents()
-        completion(makeEntry(date: .now, events: events, weather: SharedSettings.weather))
+        completion(makeEntry(date: .now, events: events,
+                             weather: includeWeather ? SharedSettings.weather : nil,
+                             preview: context.isPreview))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CalendarEntry>) -> Void) {
         Task {
             let events = fetchEvents()
-            let weather = await WeatherProvider.current()   // network only if the cache is over an hour old
+            let weather = includeWeather ? await WeatherProvider.current() : nil   // network only if the cache is over an hour old
             let now = Date()
 
             // Battery: plan only the next few hours. One entry now, one at each event start/end
@@ -93,11 +97,13 @@ struct Provider: TimelineProvider {
         }
     }
 
-    private func makeEntry(date: Date, events: [CalEvent], weather: SharedSettings.WeatherSnapshot?) -> CalendarEntry {
+    private func makeEntry(date: Date, events: [CalEvent], weather: SharedSettings.WeatherSnapshot?,
+                           preview: Bool = false) -> CalendarEntry {
         CalendarEntry(date: date,
                       events: events,
                       page: Pager.page,
                       direction: Pager.direction,
+                      isPro: preview || SharedSettings.isPro,
                       weatherIcon: weather?.iconName,
                       colors: SharedSettings.isPro
                         ? SharedSettings.colorSettings
@@ -238,6 +244,9 @@ struct CalendarWidgetView: View {
         if family == .accessoryRectangular {
             lockScreen
                 .containerBackground(.clear, for: .widget)
+        } else if family == .systemSmall {
+            smallView
+                .containerBackground(backgroundColor, for: .widget)
         } else {
             GeometryReader { geo in
                 content(height: geo.size.height)
@@ -245,6 +254,110 @@ struct CalendarWidgetView: View {
             .foregroundStyle(textColor)
             .containerBackground(backgroundColor, for: .widget)
         }
+    }
+
+    // MARK: Small (2x2): day, date and the next event
+
+    private var smallView: some View {
+        let cal = Calendar.current
+        let now = entry.date
+        let next = entry.events.first { $0.end > now }
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: Layout.dateLineSpacing) {
+                Text(now.formatted(.dateTime.weekday(.wide)))
+                    .font(.system(size: 16, weight: .bold))
+                Text(now.formatted(.dateTime.day().month(.wide)))
+                    .font(.system(size: 22, weight: .thin))
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 8)
+
+            if let e = next {
+                let active = !e.isAllDay && e.start <= now && e.end > now
+                VStack(alignment: .leading, spacing: 1) {
+                    if !cal.isDate(e.start, inSameDayAs: now) && e.start > now {
+                        Text(e.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                            .font(.system(size: 12, weight: .semibold))
+                            .opacity(0.7)
+                    }
+                    Text(e.isAllDay ? "All day" : "\(clock(e.start))–\(clock(e.end))")
+                        .font(.system(size: 14, weight: .bold))
+                        .monospacedDigit()
+                    Text(e.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .lineLimit(2)
+                    if let loc = e.location {
+                        Text(loc)
+                            .font(.system(size: 12))
+                            .italic()
+                            .lineLimit(1)
+                            .opacity(0.85)
+                    }
+                }
+                .foregroundStyle(active ? highlightColor : textColor)
+            } else {
+                Text("No upcoming events")
+                    .font(.footnote)
+                    .opacity(0.6)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .foregroundStyle(textColor)
+    }
+
+    // MARK: Small (2x2): day, date and the next event
+
+    private var smallView: some View {
+        let cal = Calendar.current
+        let now = entry.date
+        let next = entry.events.first { $0.end > now }
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: Layout.dateLineSpacing) {
+                Text(now.formatted(.dateTime.weekday(.wide)))
+                    .font(.system(size: 16, weight: .bold))
+                Text(now.formatted(.dateTime.day().month(.wide)))
+                    .font(.system(size: 22, weight: .thin))
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 8)
+
+            if let e = next {
+                let active = !e.isAllDay && e.start <= now && e.end > now
+                VStack(alignment: .leading, spacing: 1) {
+                    if !cal.isDate(e.start, inSameDayAs: now) && e.start > now {
+                        Text(e.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                            .font(.system(size: 12, weight: .semibold))
+                            .opacity(0.7)
+                    }
+                    Text(e.isAllDay ? "All day" : "\(clock(e.start))–\(clock(e.end))")
+                        .font(.system(size: 14, weight: .bold))
+                        .monospacedDigit()
+                    Text(e.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .lineLimit(2)
+                    if let loc = e.location {
+                        Text(loc)
+                            .font(.system(size: 12))
+                            .italic()
+                            .lineLimit(1)
+                            .opacity(0.85)
+                    }
+                }
+                .foregroundStyle(active ? highlightColor : textColor)
+            } else {
+                Text("No upcoming events")
+                    .font(.footnote)
+                    .opacity(0.6)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .foregroundStyle(textColor)
     }
 
     // MARK: Lock Screen (rectangular): the next three events today, or the next day's events
@@ -259,7 +372,7 @@ struct CalendarWidgetView: View {
         let nextDayEvents = upcoming.filter { nextDay != nil && cal.isDate($0.start, inSameDayAs: nextDay!) }
 
         return VStack(alignment: .leading, spacing: 1) {
-            if !SharedSettings.isPro {
+            if !entry.isPro {
                 Label("Unlock in the app", systemImage: "lock.fill")
                     .font(.system(size: 13, weight: .semibold))
                 Text("Lock Screen widget is part of the unlock")
@@ -447,7 +560,7 @@ struct CalendarListWidget: Widget {
     let kind = SharedSettings.widgetKind
 
     static var families: [WidgetFamily] {
-        var f: [WidgetFamily] = [.systemMedium, .systemLarge, .systemExtraLarge, .accessoryRectangular]
+        var f: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge, .accessoryRectangular]
         #if compiler(>=6.4)
         if #available(iOS 27, *) { f.append(.systemExtraLargePortrait) }
         #endif
@@ -465,9 +578,64 @@ struct CalendarListWidget: Widget {
     }
 }
 
+// MARK: - Lock Screen widget with one event: time range + title (2 lines), then location
+
+struct NextEventLockView: View {
+    let entry: CalendarEntry
+
+    private func clock(_ d: Date) -> String {
+        d.formatted(Date.FormatStyle().hour().minute())
+    }
+
+    var body: some View {
+        let now = entry.date
+        let next = entry.events.first { $0.end > now }
+        VStack(alignment: .leading, spacing: 1) {
+            if !entry.isPro {
+                Label("Unlock in the app", systemImage: "lock.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Lock Screen widget is part of the unlock")
+                    .font(.system(size: 11))
+                    .opacity(0.7)
+                    .lineLimit(2)
+            } else if let e = next {
+                // Lines 1-2: time range and the whole title. Line 3: location.
+                let range = e.isAllDay ? "All day" : "\(clock(e.start))–\(clock(e.end))"
+                Text("\(Text(range).bold().monospacedDigit())  \(e.title)")
+                    .font(.system(size: 13))
+                    .lineLimit(2)
+                if let loc = e.location {
+                    Text(loc)
+                        .font(.system(size: 12))
+                        .italic()
+                        .lineLimit(1)
+                        .opacity(0.85)
+                }
+            } else {
+                Text("No upcoming events")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .containerBackground(.clear, for: .widget)
+    }
+}
+
+struct NextEventLockWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: SharedSettings.nextEventKind, provider: Provider(includeWeather: false)) { entry in
+            NextEventLockView(entry: entry)
+        }
+        .configurationDisplayName("Next Event")
+        .description("Your next event on the Lock Screen: time, title and location.")
+        .supportedFamilies([.accessoryRectangular])
+    }
+}
+
 @main
 struct CalendarWidgetBundle: WidgetBundle {
     var body: some Widget {
         CalendarListWidget()
+        NextEventLockWidget()
     }
 }

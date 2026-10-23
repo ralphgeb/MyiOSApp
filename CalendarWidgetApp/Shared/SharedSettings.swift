@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WidgetKit
 
 /// A colour that can be stored in the App Group (Color itself isn't Codable).
 struct RGBA: Codable, Equatable {
@@ -27,6 +28,13 @@ struct RGBA: Codable, Equatable {
 enum SharedSettings {
     static let appGroup = "group.com.ralphgeb.calendarwidgetapp" // must match project.yml
     static let widgetKind = "CalendarListWidget"
+    static let nextEventKind = "NextEventLockWidget"
+
+    /// Refresh every widget this app offers (battery: only these two kinds, never "all").
+    static func reloadWidgets() {
+        WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
+        WidgetCenter.shared.reloadTimelines(ofKind: nextEventKind)
+    }
 
     static var defaults: UserDefaults {
         UserDefaults(suiteName: appGroup) ?? .standard

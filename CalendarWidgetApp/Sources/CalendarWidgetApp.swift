@@ -13,7 +13,7 @@ struct CalendarWidgetApp: App {
         // Each time, the widget is told to re-read the calendar.
         BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshID, using: nil) { task in
             Self.scheduleRefresh()
-            WidgetCenter.shared.reloadTimelines(ofKind: SharedSettings.widgetKind)
+            SharedSettings.reloadWidgets()
             task.setTaskCompleted(success: true)
         }
     }
@@ -23,13 +23,13 @@ struct CalendarWidgetApp: App {
             ContentView()
                 // Calendar changed while the app is open: refresh the widget straight away.
                 .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
-                    WidgetCenter.shared.reloadTimelines(ofKind: SharedSettings.widgetKind)
+                    SharedSettings.reloadWidgets()
                 }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
-                WidgetCenter.shared.reloadTimelines(ofKind: SharedSettings.widgetKind)
+                SharedSettings.reloadWidgets()
             case .background:
                 Self.scheduleRefresh()
             default: break
