@@ -24,6 +24,8 @@ struct CalendarTabView: View {
     @State private var now = Date()
     @State private var colorTick = 0     // bumped on appear so color changes from Settings show up
     @State private var status = EKEventStore.authorizationStatus(for: .event)
+    @State private var scrollY: CGFloat = 0              // how far the list has scrolled
+    @State private var dayTops: [Date: CGFloat] = [:]    // where each day starts in the list
 
     // MARK: Data
 
@@ -105,38 +107,140 @@ struct CalendarTabView: View {
     private var list: some View {
         let cal = Calendar.current
         let all = groups
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if all.first.map({ !cal.isDate($0.day, inSameDayAs: now) }) ?? true {
-                    Text(all.isEmpty ? "No upcoming events" : "No more events today")
-                        .font(.system(size: 15.5))
-                        .foregroundStyle(.secondary)
-                        .padding(.bottom, 6)
-                }
-                ForEach(Array(all.enumerated()), id: \.element.day) { index, group in
-                    if !cal.isDate(group.day, inSameDayAs: now) {
-                        if index > 0 {
-                            Rectangle()
-                                .fill(textColor.opacity(0.25))
-                                .frame(height: 1 / displayScale)
-                                .padding(.vertical, 10)
-                        }
-                        Text(group.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                            .font(.system(size: 15.5, weight: .bold))
-                            .padding(.bottom, 3)
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if all.first.map({ !cal.isDate($0.day, inSameDayAs: now) }) ?? true {
+                        Text(all.isEmpty ? "No upcoming events" : "No more events today")
+                            .font(.system(size: 15.5))
+                            .foregroundStyle(.secondary)
+                            .padding(.bottom, 6)
                     }
-                    ForEach(group.events) { row($0) }
+                    ForEach(Array(all.enumerated()), id: \.element.day) { index, group in
+                        VStack(alignment: .leading, spacing: 0) {
+                            if !cal.isDate(group.day, inSameDayAs: now) {
+                                if index > 0 {
+                                    Rectangle()
+                                        .fill(textColor.opacity(0.25))
+                                        .frame(height: 1 / displayScale)
+                                        .padding(.vertical, 10)
+                                }
+                                Text(group.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                                    .font(.system(size: 15.5, weight: .bold))
+                                    .padding(.bottom, 3)
+                            }
+                            ForEach(group.events) { row($0) }
+                        }
+                        .id(group.day)
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear.preference(key: DayTopKey.self,
+                                                       value: [group.day: geo.frame(in: .named("dayStack")).minY])
+                            }
+                        }
+                    }
+                }
+                .coordinateSpace(name: "dayStack")
+                .onPreferenceChange(DayTopKey.self) { dayTops = $0 }
+                .padding(.horizontal, 15)
+                .padding(.top, 18)
+                .padding(.bottom, 16)
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, y in
+                scrollY = y
+            }
+            .scrollIndicators(.hidden)
+            .foregroundStyle(textColor)
+            .background { pageBackground.ignoresSafeArea() }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    header
+                    weekStrip(groups: all) { day in
+                        // Jump to that day, or the next day that has events.
+                        if let target = all.first(where: { $0.day >= day }) {
+                            withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(target.day, anchor: .top) }
+                        }
+                    }
                 }
             }
-            .padding(.horizontal, 15)
-            .padding(.top, 3)
-            .padding(.bottom, 16)
+            .refreshable { load() }
         }
-        .scrollIndicators(.hidden)
-        .foregroundStyle(textColor)
-        .background { pageBackground.ignoresSafeArea() }
-        .safeAreaInset(edge: .top, spacing: 0) { header }
-        .refreshable { load() }
+    }
+
+    // MARK: Week strip
+
+    private let stripDays = 14
+    private let stripVisible = 7
+
+    /// How far down the list the reader is, measured in days (fractional), so the strip glides.
+    private func dayPosition(_ groups: [(day: Date, events: [AppEvent])]) -> CGFloat {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        let pts = groups.compactMap { g -> (y: CGFloat, d: CGFloat)? in
+            guard let y = dayTops[g.day] else { return nil }
+            let d = cal.dateComponents([.day], from: today, to: g.day).day ?? 0
+            return (y, CGFloat(d))
+        }.sorted { $0.y < $1.y }
+        guard let first = pts.first else { return 0 }
+        let v = scrollY + 4
+        if v <= first.y { return first.d == 0 ? 0 : 0 }
+        for i in 1..<max(pts.count, 1) where i < pts.count {
+            if v < pts[i].y {
+                let a = pts[i - 1], b = pts[i]
+                let t = (v - a.y) / max(b.y - a.y, 1)
+                return a.d + (b.d - a.d) * t
+            }
+        }
+        return pts.last!.d
+    }
+
+    private func weekStrip(groups: [(day: Date, events: [AppEvent])], jump: @escaping (Date) -> Void) -> some View {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        let pos = max(0, min(dayPosition(groups), CGFloat(stripDays - 1)))
+        let shift = min(pos, CGFloat(stripDays - stripVisible))
+        let current = Int(pos.rounded())
+        let counts = Dictionary(uniqueKeysWithValues: groups.map { ($0.day, $0.events.count) })
+
+        return GeometryReader { geo in
+            let cell = (geo.size.width - 30) / CGFloat(stripVisible)
+            HStack(spacing: 0) {
+                ForEach(0..<stripDays, id: \.self) { i in
+                    let day = cal.date(byAdding: .day, value: i, to: today) ?? today
+                    let isToday = i == 0
+                    let n = min(counts[day] ?? 0, 3)
+                    VStack(spacing: 4) {
+                        Text(day.formatted(.dateTime.weekday(.narrow)))
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        ZStack {
+                            if isToday { Circle().fill(highlight) }
+                            if i == current { Circle().stroke(textColor, lineWidth: 1.5).padding(isToday ? -3 : 0) }
+                            Text(day.formatted(.dateTime.day()))
+                                .font(.system(size: 15, weight: isToday ? .bold : .regular))
+                                .foregroundStyle(isToday ? Color.black : textColor)
+                        }
+                        .frame(width: 30, height: 30)
+                        HStack(spacing: 3) {
+                            ForEach(0..<3, id: \.self) { k in
+                                Circle().fill(k < n ? textColor.opacity(0.7) : .clear).frame(width: 4, height: 4)
+                            }
+                        }
+                    }
+                    .frame(width: cell)
+                    .opacity(i < current ? 0.45 : 1)
+                    .contentShape(Rectangle())
+                    .onTapGesture { jump(day) }
+                }
+            }
+            .offset(x: 15 - shift * cell)
+            .frame(width: geo.size.width, alignment: .leading)
+            .clipped()
+        }
+        .frame(height: 78)
+        .background(pageBackground)
+        .overlay(alignment: .top) { Rectangle().fill(textColor.opacity(0.25)).frame(height: 1 / displayScale) }
+        .overlay(alignment: .bottom) { Rectangle().fill(textColor.opacity(0.25)).frame(height: 1 / displayScale) }
     }
 
     /// Stays at the top while the events scroll underneath.
@@ -243,5 +347,12 @@ struct CalendarAccessNeededView: View {
                     .buttonStyle(.borderedProminent)
             }
         }
+    }
+}
+
+private struct DayTopKey: PreferenceKey {
+    static var defaultValue: [Date: CGFloat] = [:]
+    static func reduce(value: inout [Date: CGFloat], nextValue: () -> [Date: CGFloat]) {
+        value.merge(nextValue()) { $1 }
     }
 }
