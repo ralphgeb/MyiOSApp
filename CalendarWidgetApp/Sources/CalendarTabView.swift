@@ -25,6 +25,7 @@ struct CalendarTabView: View {
     @State private var colorTick = 0     // bumped on appear so color changes from Settings show up
     @State private var status = EKEventStore.authorizationStatus(for: .event)
     @State private var scrollY: CGFloat = 0              // how far the list has scrolled
+    @State private var insetHeight: CGFloat = 0
     @State private var dayTops: [Date: CGFloat] = [:]    // where each day starts in the list
 
     // MARK: Data
@@ -141,14 +142,18 @@ struct CalendarTabView: View {
                     }
                 }
                 .coordinateSpace(name: "dayStack")
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(key: ScrollTopKey.self, value: geo.frame(in: .named("scrollArea")).minY)
+                    }
+                }
                 .onPreferenceChange(DayTopKey.self) { dayTops = $0 }
                 .padding(.horizontal, 15)
                 .padding(.top, 18)
                 .padding(.bottom, 16)
             }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, y in
-                scrollY = y
-            }
+            .coordinateSpace(name: "scrollArea")
+            .onPreferenceChange(ScrollTopKey.self) { scrollY = insetHeight - $0 }
             .scrollIndicators(.hidden)
             .foregroundStyle(textColor)
             .background { pageBackground.ignoresSafeArea() }
@@ -160,6 +165,12 @@ struct CalendarTabView: View {
                         if let target = all.first(where: { $0.day >= day }) {
                             withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(target.day, anchor: .top) }
                         }
+                    }
+                }
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.onAppear { insetHeight = geo.size.height }
+                            .onChange(of: geo.size.height) { _, h in insetHeight = h }
                     }
                 }
             }
@@ -355,4 +366,9 @@ private struct DayTopKey: PreferenceKey {
     static func reduce(value: inout [Date: CGFloat], nextValue: () -> [Date: CGFloat]) {
         value.merge(nextValue()) { $1 }
     }
+}
+
+private struct ScrollTopKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
