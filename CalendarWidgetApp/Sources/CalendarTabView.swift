@@ -230,39 +230,40 @@ struct CalendarTabView: View {
         topPad + letterH + gridHeight(scroll: s) + bottomPad + 1
     }
 
-    /// How far down the list the reader is, in days from the start of the grid (fractional so the strip glides).
-    private func dayPosition(_ groups: [(day: Date, events: [AppEvent])]) -> CGFloat {
-        let todayIdx = CGFloat(dayIndex(todayStart))
-        let headerBottom = dateHeaderHeight + calendarHeight(scroll: scrollY)
+    /// Where the reader is in the list: `p` is a fractional day position (so the strip glides),
+    /// `cur` is the day whose events are first in view (that day gets the orange circle).
+    private func dayPosition(_ groups: [(day: Date, events: [AppEvent])]) -> (p: CGFloat, cur: Int) {
+        let todayIdx = dayIndex(todayStart)
+        let s = max(scrollY, 0)
+        let headerBottom = dateHeaderHeight + calendarHeight(scroll: s)
         let pts = groups.compactMap { g -> (y: CGFloat, d: CGFloat)? in
             guard let y = dayTops[g.day] else { return nil }
             return (y, CGFloat(dayIndex(g.day)))
         }.sorted { $0.y < $1.y }
-        guard let first = pts.first else { return todayIdx }
-        let v = scrollY + headerBottom + 18
-        if v <= first.y { return todayIdx }
+        let v = s + headerBottom + 18
+        let cur = pts.last(where: { $0.y <= v + 2 }).map { Int($0.d) } ?? todayIdx
+        guard let first = pts.first, v > first.y else { return (CGFloat(todayIdx), max(cur, todayIdx)) }
         for i in 1..<max(pts.count, 1) where i < pts.count {
             if v < pts[i].y {
                 let a = pts[i - 1], b = pts[i]
-                return a.d + (b.d - a.d) * ((v - a.y) / max(b.y - a.y, 1))
+                return (a.d + (b.d - a.d) * ((v - a.y) / max(b.y - a.y, 1)), cur)
             }
         }
-        return pts.last!.d
+        return (pts.last!.d, cur)
     }
 
     private func calendarBlock(groups: [(day: Date, events: [AppEvent])],
                                jump: @escaping (Date) -> Void) -> some View {
         let total = totalDays
-        let p = max(0, min(dayPosition(groups), CGFloat(total - 1)))
-        let current = Int(p.rounded())
+        let pos = dayPosition(groups)
+        let p = max(0, min(pos.p, CGFloat(total - 1)))
+        let current = max(0, min(pos.cur, total - 1))
         let todayIdx = dayIndex(todayStart)
         let rowStart = CGFloat(todayRow * 7)
         let sc = foldScroll(scrollY)
-        // Fold first with the orange day staying in its column; after that the days slide sideways
-        // and the orange day drifts left over about three days of scrolling, then stays at the left edge.
-        let col0 = CGFloat(todayIdx) - rowStart
-        let k = 1 + col0 / 3
-        let ws = max(rowStart, min(rowStart + (p - CGFloat(todayIdx)) * k, p, CGFloat(total - 7)))
+        // The month folds first (days stay in their columns). After that the orange day moves right
+        // across the week, and once it reaches the last column the days slide to keep it in view.
+        let ws = max(0, min(max(rowStart, min(p - 6, CGFloat(current))), CGFloat(total - 7)))
         let upcoming = events.filter { $0.end > now }
         let counts = Dictionary(grouping: upcoming) { cal.startOfDay(for: $0.start) }.mapValues { $0.count }
         let days: [Date] = (0..<total).map { cal.date(byAdding: .day, value: $0, to: gridStart) ?? gridStart }
