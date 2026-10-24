@@ -1,35 +1,41 @@
 import Foundation
+import CoreLocation
+import WeatherKit
 
-/// Looks up the current weather from Open-Meteo (free, no account needed).
+/// Looks up the current weather with Apple WeatherKit (free with the developer account).
 /// Used by the widget and by the app, so the icon can appear as soon as location is allowed.
 enum WeatherFetcher {
-    private struct Response: Decodable {
-        struct Current: Decodable {
-            let weather_code: Int
-            let is_day: Int
-        }
-        let current: Current
-    }
-
     static func fetch(lat: Double, lon: Double) async -> SharedSettings.WeatherSnapshot? {
-        var comps = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
-        comps.queryItems = [
-            URLQueryItem(name: "latitude", value: String(format: "%.3f", lat)),
-            URLQueryItem(name: "longitude", value: String(format: "%.3f", lon)),
-            URLQueryItem(name: "current", value: "weather_code,is_day"),
-        ]
-        guard let url = comps.url else { return nil }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 8
-
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let r = try JSONDecoder().decode(Response.self, from: data)
-            return SharedSettings.WeatherSnapshot(code: r.current.weather_code,
-                                                  isDay: r.current.is_day == 1,
+            let weather = try await WeatherService.shared.weather(for: CLLocation(latitude: lat, longitude: lon),
+                                                                   including: .current)
+            return SharedSettings.WeatherSnapshot(code: wmoCode(for: weather.condition.rawValue),
+                                                  isDay: weather.isDaylight,
                                                   fetched: Date())
         } catch {
             return nil
+        }
+    }
+
+    /// Turns a WeatherKit condition into the weather code the icon picker already understands.
+    private static func wmoCode(for condition: String) -> Int {
+        switch condition {
+        case "clear", "hot", "frigid": return 0
+        case "mostlyClear": return 1
+        case "partlyCloudy": return 2
+        case "mostlyCloudy", "cloudy", "windy", "breezy", "blowingDust": return 3
+        case "foggy", "haze", "smoky": return 45
+        case "drizzle": return 51
+        case "freezingDrizzle": return 56
+        case "rain": return 63
+        case "sunShowers": return 80
+        case "heavyRain": return 65
+        case "freezingRain": return 66
+        case "sleet", "wintryMix", "hail": return 67
+        case "snow", "flurries", "heavySnow", "blizzard", "blowingSnow", "sunFlurries": return 73
+        case "thunderstorms", "isolatedThunderstorms", "scatteredThunderstorms", "strongStorms",
+             "tropicalStorm", "hurricane": return 95
+        default: return 3
         }
     }
 }

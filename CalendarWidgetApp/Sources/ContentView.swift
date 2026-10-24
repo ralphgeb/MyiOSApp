@@ -2,6 +2,7 @@ import SwiftUI
 import EventKit
 import CoreLocation
 import WidgetKit
+import WeatherKit
 
 /// Settings page: choose which calendars the widget shows and how it looks.
 struct ContentView: View {
@@ -197,6 +198,7 @@ struct ContentView: View {
             default:
                 Button("Allow Location for Weather") { location.request() }
             }
+            AppleWeatherAttribution()
         } header: {
             Text("Weather")
         } footer: {
@@ -382,4 +384,32 @@ final class LocationAccess: NSObject, ObservableObject, CLLocationManagerDelegat
 
 extension Notification.Name {
     static let weatherUpdated = Notification.Name("weatherUpdated")
+}
+
+/// Apple requires apps that show WeatherKit data to show the "Apple Weather" mark and link to its legal page.
+struct AppleWeatherAttribution: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var attribution: WeatherAttribution?
+
+    private static let fallbackURL = URL(string: "https://weatherkit.apple.com/legal-attribution.html")!
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let url = scheme == .dark ? attribution?.combinedMarkDarkURL : attribution?.combinedMarkLightURL {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFit()
+                } placeholder: {
+                    Text("Apple Weather")
+                }
+                .frame(height: 16)
+            } else {
+                Text("Apple Weather")
+            }
+            Link("Weather data and legal information", destination: attribution?.legalPageURL ?? Self.fallbackURL)
+                .font(.footnote)
+        }
+        .task {
+            attribution = try? await WeatherService.shared.attribution
+        }
+    }
 }

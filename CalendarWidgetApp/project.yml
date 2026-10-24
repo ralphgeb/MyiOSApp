@@ -43,6 +43,7 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.ralphgeb.calendarwidgetapp
+        com.apple.developer.weatherkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ralphgeb.calendarwidgetapp
@@ -69,6 +70,7 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.ralphgeb.calendarwidgetapp
+        com.apple.developer.weatherkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ralphgeb.calendarwidgetapp.widget
