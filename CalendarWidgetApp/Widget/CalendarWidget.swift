@@ -372,16 +372,15 @@ struct CalendarWidgetView: View {
         .foregroundStyle(textColor)
     }
 
-    // MARK: Lock Screen (rectangular): the next three events today, or the next day's events
+    // MARK: Lock Screen (rectangular): always three events, running on into the next days
 
     private var lockScreen: some View {
         let cal = Calendar.current
         let now = entry.date
         let upcoming = entry.events.filter { $0.end > now }
-        // Events still to come today (including one that is on right now).
-        let today = upcoming.filter { cal.isDate($0.start, inSameDayAs: now) || $0.start < now }
-        let nextDay = upcoming.first.map { cal.startOfDay(for: $0.start) }
-        let nextDayEvents = upcoming.filter { nextDay != nil && cal.isDate($0.start, inSameDayAs: nextDay!) }
+        // Events still to come today (including one that is on right now), then whatever follows.
+        let isToday: (CalEvent) -> Bool = { cal.isDate($0.start, inSameDayAs: now) || $0.start < now }
+        let lines = Array((upcoming.filter(isToday) + upcoming.filter { !isToday($0) }).prefix(3))
 
         return VStack(alignment: .leading, spacing: 1) {
             if !entry.isPro {
@@ -391,14 +390,10 @@ struct CalendarWidgetView: View {
                     .font(.system(size: 11))
                     .opacity(0.7)
                     .lineLimit(2)
-            } else if !today.isEmpty {
-                ForEach(Array(today.prefix(3)), id: \.id) { lockLine($0, now: now) }
-            } else if let day = nextDay {
-                // Nothing left today: first line is the date of the next day with events.
-                Text(day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                    .font(.system(size: 13, weight: .bold))
-                    .widgetAccentable()
-                ForEach(Array(nextDayEvents.prefix(2)), id: \.id) { lockLine($0, now: now) }
+            } else if !lines.isEmpty {
+                ForEach(lines, id: \.id) { e in
+                    lockLine(e, now: now, today: isToday(e))
+                }
             } else {
                 Text("No upcoming events")
                     .font(.system(size: 13, weight: .semibold))
@@ -407,14 +402,26 @@ struct CalendarWidgetView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func lockLine(_ e: CalEvent, now: Date) -> some View {
+    /// "Tomorrow" or the date for events that are not today.
+    private func dayLabel(_ d: Date, now: Date) -> String {
+        let cal = Calendar.current
+        if let tomorrow = cal.date(byAdding: .day, value: 1, to: now), cal.isDate(d, inSameDayAs: tomorrow) {
+            return "Tomorrow"
+        }
+        return d.formatted(.dateTime.weekday(.abbreviated).day())
+    }
+
+    private func lockLine(_ e: CalEvent, now: Date, today: Bool) -> some View {
         let active = !e.isAllDay && e.start <= now && e.end > now
+        let label = !today ? dayLabel(e.start, now: now) : (e.isAllDay ? "All day" : clock(e.start))
         return HStack(spacing: 5) {
-            Text(e.isAllDay ? "All day" : clock(e.start))
-                .font(.system(size: 13, weight: .bold))
+            Text(label)
+                .font(.system(size: 15, weight: .bold))
                 .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize()
             Text(e.title)
-                .font(.system(size: 13, weight: active ? .semibold : .regular))
+                .font(.system(size: 15, weight: active ? .semibold : .regular))
                 .lineLimit(1)
         }
     }
@@ -608,7 +615,7 @@ struct NextEventLockView: View {
     var body: some View {
         let now = entry.date
         let next = entry.events.first { $0.end > now }
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 0) {
             if !entry.isPro {
                 Label("Unlock in the app", systemImage: "lock.fill")
                     .font(.system(size: 13, weight: .semibold))
@@ -617,17 +624,27 @@ struct NextEventLockView: View {
                     .opacity(0.7)
                     .lineLimit(2)
             } else if let e = next {
-                // Lines 1-2: time range and the whole title. Line 3: location.
-                let range = e.isAllDay ? "All day" : "\(clock(e.start))–\(clock(e.end))"
-                Text("\(Text(range).bold().monospacedDigit())  \(e.title)")
-                    .font(.system(size: 15))
-                    .lineLimit(2)
+                // Three lines, all the same size: time range, title, location.
+                let size: CGFloat = 16.5
+                Group {
+                    if e.isAllDay {
+                        Text("All day").bold()
+                    } else {
+                        Text(clock(e.start)).bold().monospacedDigit()
+                            + Text("–").fontWeight(.light)
+                            + Text(clock(e.end)).bold().monospacedDigit()
+                    }
+                }
+                .font(.system(size: size))
+                .lineLimit(1)
+                Text(e.title)
+                    .font(.system(size: size, weight: .medium))
+                    .lineLimit(e.location == nil ? 2 : 1)
                 if let loc = e.location {
                     Text(loc)
-                        .font(.system(size: 14))
+                        .font(.system(size: size, weight: .thin))
                         .italic()
                         .lineLimit(1)
-                        .opacity(0.85)
                 }
             } else {
                 Text("No upcoming events")
