@@ -22,7 +22,7 @@ struct CalendarTabView: View {
     @Environment(\.displayScale) private var displayScale
     @State private var events: [AppEvent] = []
     @State private var now = Date()
-    @State private var colorTick = 0     // bumped on appear so colour changes from Settings show up
+    @State private var colorTick = 0     // bumped on appear so color changes from Settings show up
     @State private var status = EKEventStore.authorizationStatus(for: .event)
 
     // MARK: Data
@@ -30,7 +30,7 @@ struct CalendarTabView: View {
     private var colors: SharedSettings.ColorSet {
         SharedSettings.isPro ? SharedSettings.colorSettings.resolved(for: scheme) : SharedSettings.ColorSet()
     }
-    /// Dark grey like the widget in Dark mode (not black); the system background in Light mode.
+    /// Dark gray like the widget in Dark mode (not black); the system background in Light mode.
     private var pageBackground: Color {
         colors.background?.color ?? (scheme == .dark ? Color(red: 0.11, green: 0.11, blue: 0.118) : Color(.systemBackground))
     }

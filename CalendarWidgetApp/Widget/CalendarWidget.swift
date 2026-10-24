@@ -86,7 +86,7 @@ struct Provider: TimelineProvider {
             let now = Date()
 
             // Battery: plan only the next few hours. One entry now, one at each event start/end
-            // (so the orange "happening now" colour flips on time) and one at midnight.
+            // (so the orange "happening now" color flips on time) and one at midnight.
             // The system then asks for a fresh timeline after 30 minutes, which also picks up new calendar events.
             let horizon = now.addingTimeInterval(4 * 3600)
             var times: Set<Date> = [now]
@@ -160,7 +160,7 @@ struct CalendarWidgetView: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var scheme
 
-    // MARK: Colours (custom colours, or the system defaults)
+    // MARK: Colors (custom colors, or the system defaults)
 
     private var colorSet: SharedSettings.ColorSet { entry.colors.resolved(for: scheme) }
     private var textColor: Color { colorSet.text?.color ?? .primary }
@@ -489,7 +489,7 @@ struct CalendarWidgetView: View {
     }
 
     /// Today: weekday bold, date + month larger and thin, weather icon at the right
-    /// (centred on the two lines). Stays on screen whichever page is showing.
+    /// (centered on the two lines). Stays on screen whichever page is showing.
     private var pinnedHeader: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: Layout.dateLineSpacing) {

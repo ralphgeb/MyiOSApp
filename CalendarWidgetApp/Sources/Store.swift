@@ -91,7 +91,7 @@ struct PaywallView: View {
                     .foregroundStyle(.tint)
                     .padding(.top, 24)
 
-                Text("Unlock Customisation")
+                Text("Unlock Customization")
                     .font(.title2.bold())
 
                 VStack(alignment: .leading, spacing: 12) {

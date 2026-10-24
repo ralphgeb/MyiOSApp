@@ -2,14 +2,14 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
-/// A colour that can be stored in the App Group (Color itself isn't Codable).
+/// A color that can be stored in the App Group (Color itself isn't Codable).
 struct RGBA: Codable, Equatable {
     var r: Double
     var g: Double
     var b: Double
     var a: Double
 
-    /// Always a solid colour (no transparency).
+    /// Always a solid color (no transparency).
     var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: 1) }
 
     init(r: Double, g: Double, b: Double, a: Double) {
@@ -60,7 +60,7 @@ enum SharedSettings {
     // MARK: Purchase (written by the app, read by the widget)
 
     /// True once the one-time unlock has been bought. While false, the widget ignores the
-    /// calendar and colour settings.
+    /// calendar and color settings.
     static var isPro: Bool {
         get { defaults.bool(forKey: Key.isPro) }
         set { defaults.set(newValue, forKey: Key.isPro) }
@@ -89,17 +89,17 @@ enum SharedSettings {
         set { defaults.set(newValue, forKey: Key.showAllDay) }
     }
 
-    // MARK: Colours (nil = default: transparent background, system text colour)
+    // MARK: Colors (nil = default: transparent background, system text color)
 
-    /// Background and text colour. Either can be nil, which means "use the default".
+    /// Background and text color. Either can be nil, which means "use the default".
     struct ColorSet: Codable, Equatable {
         var background: RGBA?
         var text: RGBA?
-        var highlight: RGBA?      // colour of the event happening now (default orange)
+        var highlight: RGBA?      // color of the event happening now (default orange)
         var isEmpty: Bool { background == nil && text == nil && highlight == nil }
     }
 
-    /// Everything the widget needs to pick its colours.
+    /// Everything the widget needs to pick its colors.
     /// When `ignoreAppearance` is on, one set (`both`) is used in Light and Dark mode.
     /// When it's off, Light and Dark mode each keep their own set.
     struct ColorSettings {
@@ -126,13 +126,13 @@ enum SharedSettings {
         set { defaults.set(newValue, forKey: Key.ignoreAppearance) }
     }
 
-    /// True once the user has changed any colour from the original.
+    /// True once the user has changed any color from the original.
     static var hasCustomColors: Bool {
         let c = colorSettings
         return !(c.both.isEmpty && c.light.isEmpty && c.dark.isEmpty)
     }
 
-    /// The colours currently being edited: the shared set if the toggle is on, otherwise the
+    /// The colors currently being edited: the shared set if the toggle is on, otherwise the
     /// set for the mode the phone is in right now.
     static func editableColors(for scheme: ColorScheme) -> ColorSet {
         colorSettings.resolved(for: scheme)
@@ -145,7 +145,7 @@ enum SharedSettings {
         save(set.isEmpty ? nil : set, key)
     }
 
-    /// Turning the toggle on makes the colours you see right now apply in both modes.
+    /// Turning the toggle on makes the colors you see right now apply in both modes.
     static func setIgnoreAppearance(_ on: Bool, currentScheme: ColorScheme) {
         if on {
             let current = colorSettings.resolved(for: currentScheme)

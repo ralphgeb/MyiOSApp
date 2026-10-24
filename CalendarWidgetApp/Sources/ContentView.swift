@@ -16,7 +16,7 @@ struct ContentView: View {
     @State private var showAllDay = SharedSettings.showAllDay
     @State private var ignoreAppearance = SharedSettings.ignoreAppearance
     @State private var hasCustomColors = SharedSettings.hasCustomColors
-    @State private var colorRefresh = 0          // bumped to redraw the colour pickers
+    @State private var colorRefresh = 0          // bumped to redraw the color pickers
     @State private var pendingReload: Task<Void, Never>?
     @EnvironmentObject private var location: LocationAccess
     @StateObject private var purchase = Store()
@@ -46,7 +46,7 @@ struct ContentView: View {
         Form {
             unlockSection
             calendarsSection
-            customisationSection
+            customizationSection
             optionsSection
             weatherSection
             Section {
@@ -122,7 +122,7 @@ struct ContentView: View {
             }
     }
 
-    private var customisationSection: some View {
+    private var customizationSection: some View {
         Section {
             locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: false))
             locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
@@ -143,16 +143,16 @@ struct ContentView: View {
                 }
             } label: {
                 if resetFlash {
-                    Label("Colours reset", systemImage: "checkmark.circle.fill")
+                    Label("Colors reset", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 } else {
-                    Text("Reset Colours to Default").foregroundStyle(.red)
+                    Text("Reset Colors to Default").foregroundStyle(.red)
                 }
             }
             .sensoryFeedback(.success, trigger: resetTick))
         } header: {
             HStack {
-                Text("Widget Customisation")
+                Text("Widget Customization")
                 if !purchase.isPro { Image(systemName: "lock.fill").imageScale(.small) }
             }
         } footer: {
@@ -207,7 +207,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Colour bindings (read and write the shared settings directly)
+    // MARK: Color bindings (read and write the shared settings directly)
 
     private var backgroundBinding: Binding<Color> {
         Binding(
@@ -269,7 +269,7 @@ struct ContentView: View {
         syncColorState()
     }
 
-    /// Battery: wait for changes to settle (a colour picker sends many changes while you drag)
+    /// Battery: wait for changes to settle (a color picker sends many changes while you drag)
     /// and refresh only this widget, once.
     private func scheduleWidgetReload() {
         pendingReload?.cancel()
