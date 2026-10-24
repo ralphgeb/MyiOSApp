@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var hidden = SharedSettings.hiddenCalendarIDs
     @State private var daysAhead = SharedSettings.daysAhead
     @State private var showAllDay = SharedSettings.showAllDay
+    @State private var glass = SharedSettings.glassBackground
     @State private var ignoreAppearance = SharedSettings.ignoreAppearance
     @State private var hasCustomColors = SharedSettings.hasCustomColors
     @State private var colorRefresh = 0          // bumped to redraw the color pickers
@@ -128,6 +129,11 @@ struct ContentView: View {
             locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
             locked(ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false))
             locked(ColorPicker("Highlighted Date Text", selection: highlightTextBinding, supportsOpacity: false))
+            locked(Toggle("Glass Widget Background", isOn: $glass)
+                .onChange(of: glass) { _, new in
+                    SharedSettings.glassBackground = new
+                    scheduleWidgetReload()
+                })
             locked(Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
                 .disabled(!hasCustomColors))
             locked(Button {

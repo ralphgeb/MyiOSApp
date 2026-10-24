@@ -48,6 +48,7 @@ enum SharedSettings {
         static let hiddenCalendars = "hiddenCalendarIDs"
         static let daysAhead = "daysAhead"
         static let showAllDay = "showAllDayEvents"
+        static let glass = "glassWidgetBackground"
         static let colorsBoth = "colorsBoth"
         static let colorsLight = "colorsLight"
         static let colorsDark = "colorsDark"
@@ -82,6 +83,12 @@ enum SharedSettings {
             return v == 0 ? 4 : min(max(v, 1), 7)
         }
         set { defaults.set(min(max(newValue, 1), 7), forKey: Key.daysAhead) }
+    }
+
+    /// Frosted, see-through widget background instead of the background color (off by default).
+    static var glassBackground: Bool {
+        get { defaults.object(forKey: Key.glass) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: Key.glass) }
     }
 
     static var showAllDay: Bool {

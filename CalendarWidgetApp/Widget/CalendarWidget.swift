@@ -304,19 +304,19 @@ struct CalendarWidgetView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .foregroundStyle(textColor)
-            .containerBackground(backgroundColor, for: .widget)
+            .widgetBackground(backgroundColor, glass: entry.isPro && SharedSettings.glassBackground)
         } else if family == .accessoryRectangular {
             lockScreen
                 .containerBackground(.clear, for: .widget)
         } else if family == .systemSmall {
             smallView
-                .containerBackground(backgroundColor, for: .widget)
+                .widgetBackground(backgroundColor, glass: entry.isPro && SharedSettings.glassBackground)
         } else {
             GeometryReader { geo in
                 content(height: geo.size.height)
             }
             .foregroundStyle(textColor)
-            .containerBackground(backgroundColor, for: .widget)
+            .widgetBackground(backgroundColor, glass: entry.isPro && SharedSettings.glassBackground)
         }
     }
 
@@ -672,5 +672,22 @@ struct CalendarWidgetBundle: WidgetBundle {
     var body: some Widget {
         CalendarListWidget()
         NextEventLockWidget()
+    }
+}
+
+extension View {
+    /// Solid color, or a frosted glass material when the Glass option is on.
+    @ViewBuilder
+    func widgetBackground(_ color: Color, glass: Bool) -> some View {
+        if glass {
+            containerBackground(for: .widget) {
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    Rectangle().fill(.white.opacity(0.06))
+                }
+            }
+        } else {
+            containerBackground(color, for: .widget)
+        }
     }
 }
