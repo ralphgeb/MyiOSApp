@@ -44,6 +44,12 @@ struct CalendarTabView: View {
         return SharedSettings.colorSettings.resolved(for: scheme).highlight?.color ?? .orange
     }
 
+    /// Number inside the highlighted date's circle.
+    private var highlightedDateText: Color {
+        guard SharedSettings.isPro else { return .black }
+        return SharedSettings.colorSettings.resolved(for: scheme).highlightText?.color ?? .black
+    }
+
     /// Finished events are hidden, so the first row is always what's on now or next.
     private var groups: [(day: Date, events: [AppEvent])] {
         let cal = Calendar.current
@@ -276,7 +282,7 @@ struct CalendarTabView: View {
                     if isCurrent { Circle().fill(highlight) }
                     Text(days[i].formatted(.dateTime.day()))
                         .font(.system(size: 14.5, weight: isCurrent || i == todayIdx ? .bold : .regular))
-                        .foregroundStyle(isCurrent ? Color.black : (i == todayIdx ? highlight : textColor.opacity(0.5)))
+                        .foregroundStyle(isCurrent ? highlightedDateText : (i == todayIdx ? highlight : textColor.opacity(0.5)))
                 }
                 .frame(width: circle, height: circle)
                 HStack(spacing: 3) {

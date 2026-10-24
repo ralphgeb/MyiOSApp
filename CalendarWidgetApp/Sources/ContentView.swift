@@ -127,6 +127,7 @@ struct ContentView: View {
             locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: false))
             locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
             locked(ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false))
+            locked(ColorPicker("Highlighted Date Text", selection: highlightTextBinding, supportsOpacity: false))
             locked(Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
                 .disabled(!hasCustomColors))
             locked(Button {
@@ -236,6 +237,17 @@ struct ContentView: View {
             get: { SharedSettings.editableColors(for: scheme).highlight?.color ?? .orange },
             set: { new in
                 SharedSettings.updateColors(for: scheme) { $0.highlight = RGBA(new) }
+                syncColorState()
+                scheduleWidgetReload()
+            }
+        )
+    }
+
+    private var highlightTextBinding: Binding<Color> {
+        Binding(
+            get: { SharedSettings.editableColors(for: scheme).highlightText?.color ?? .black },
+            set: { new in
+                SharedSettings.updateColors(for: scheme) { $0.highlightText = RGBA(new) }
                 syncColorState()
                 scheduleWidgetReload()
             }

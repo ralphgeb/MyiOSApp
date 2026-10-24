@@ -96,7 +96,8 @@ enum SharedSettings {
         var background: RGBA?
         var text: RGBA?
         var highlight: RGBA?      // color of the event happening now (default orange)
-        var isEmpty: Bool { background == nil && text == nil && highlight == nil }
+        var highlightText: RGBA?  // number inside the orange circle in the app's calendar (default black)
+        var isEmpty: Bool { background == nil && text == nil && highlight == nil && highlightText == nil }
     }
 
     /// Everything the widget needs to pick its colors.
