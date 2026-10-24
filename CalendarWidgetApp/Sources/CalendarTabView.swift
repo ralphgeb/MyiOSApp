@@ -153,7 +153,10 @@ struct CalendarTabView: View {
                 .padding(.bottom, 16)
             }
             .coordinateSpace(name: "scrollArea")
-            .onPreferenceChange(ScrollTopKey.self) { scrollY = insetHeight - $0 }
+            .modifier(ScrollTracker(y: $scrollY))
+            .onPreferenceChange(ScrollTopKey.self) { v in
+                if #unavailable(iOS 18) { scrollY = insetHeight - v }
+            }
             .scrollIndicators(.hidden)
             .foregroundStyle(textColor)
             .background { pageBackground.ignoresSafeArea() }
@@ -220,15 +223,14 @@ struct CalendarTabView: View {
                     let day = cal.date(byAdding: .day, value: i, to: today) ?? today
                     let isToday = i == 0
                     let n = min(counts[day] ?? 0, 3)
-                    VStack(spacing: 4) {
+                    VStack(spacing: 0) {
                         Text(day.formatted(.dateTime.weekday(.narrow)))
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundStyle(.secondary)
                         ZStack {
                             if isToday { Circle().fill(highlight) }
-                            if i == current { Circle().stroke(textColor, lineWidth: 1.5).padding(isToday ? -3 : 0) }
                             Text(day.formatted(.dateTime.day()))
-                                .font(.system(size: 15, weight: isToday ? .bold : .regular))
+                                .font(.system(size: 15, weight: isToday || i == current ? .bold : .regular))
                                 .foregroundStyle(isToday ? Color.black : textColor)
                         }
                         .frame(width: 30, height: 30)
@@ -371,4 +373,16 @@ private struct DayTopKey: PreferenceKey {
 private struct ScrollTopKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// Reports how far the list has scrolled (iOS 18+; older versions use the preference above).
+private struct ScrollTracker: ViewModifier {
+    @Binding var y: CGFloat
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top - 18 } action: { _, v in y = v }
+        } else {
+            content
+        }
+    }
 }
