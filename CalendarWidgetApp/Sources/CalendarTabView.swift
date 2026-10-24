@@ -276,7 +276,7 @@ struct CalendarTabView: View {
                     if isCurrent { Circle().fill(highlight) }
                     Text(days[i].formatted(.dateTime.day()))
                         .font(.system(size: 14.5, weight: isCurrent || i == todayIdx ? .bold : .regular))
-                        .foregroundStyle(isCurrent ? Color.black : (i == todayIdx ? highlight : textColor))
+                        .foregroundStyle(isCurrent ? Color.black : (i == todayIdx ? highlight : textColor.opacity(0.5)))
                 }
                 .frame(width: circle, height: circle)
                 HStack(spacing: 3) {
@@ -286,7 +286,7 @@ struct CalendarTabView: View {
                 }
             }
             .frame(width: width, height: rowH)
-            .opacity(i < current ? 0.4 : 1)
+            .opacity(i < current ? 0.6 : 1)
             .contentShape(Rectangle())
             .onTapGesture { jump(days[i]) }
         }
@@ -301,7 +301,7 @@ struct CalendarTabView: View {
                     ForEach(0..<total, id: \.self) { i in
                         Text(days[i].formatted(.dateTime.weekday(.narrow)))
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(textColor.opacity(0.5))
                             .frame(width: cw, height: letterH)
                     }
                 }
@@ -361,6 +361,7 @@ struct CalendarTabView: View {
                 WeatherIconView(name: snap.iconName, color: textColor, size: 43)
             }
         }
+        .foregroundStyle(textColor)
         .padding(.horizontal, 15)
         .padding(.top, 6)
         .padding(.bottom, 8)
