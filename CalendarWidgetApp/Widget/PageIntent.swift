@@ -65,6 +65,7 @@ struct PageIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         Pager.direction = target >= Pager.currentPage(for: family) ? 1 : -1
         Pager.set(page: target, for: family)
+        SharedSettings.pagingLog = "\(Date().formatted(date: .omitted, time: .standard)): page \(target + 1), \(family)"
         WidgetCenter.shared.reloadTimelines(ofKind: CalendarListWidget.kind)
         return .result()
     }

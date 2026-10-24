@@ -11,6 +11,14 @@ enum WeatherProvider {
             return cached
         }
 
+        // Never slow the widget down: after an attempt, wait 15 minutes before trying again,
+        // so taps on the arrows and other refreshes stay instant even if the lookup fails.
+        if Date().timeIntervalSince(SharedSettings.weatherLastAttempt) < 15 * 60 {
+            if let cached, Date().timeIntervalSince(cached.fetched) < 3 * 3600 { return cached }
+            return nil
+        }
+        SharedSettings.weatherLastAttempt = Date()
+
         if let coord = await LocationProvider.coordinate(),
            let fresh = await WeatherFetcher.fetch(lat: coord.lat, lon: coord.lon) {
             SharedSettings.weather = fresh
@@ -50,7 +58,7 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
             continuation = cont
             manager.requestLocation()
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 8_000_000_000)   // give up after 8 s
+                try? await Task.sleep(nanoseconds: 3_000_000_000)   // give up after 3 s
                 self.finish(self.manager.location)
             }
         }
@@ -68,5 +76,19 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in self.finish(self.manager.location) }
+    }
+}
+
+/// Runs `operation` but gives up after `seconds`, returning nil.
+func withTimeout<T>(_ seconds: Double, _ operation: @escaping () async -> T?) async -> T? {
+    await withTaskGroup(of: T?.self) { group in
+        group.addTask { await operation() }
+        group.addTask {
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            return nil
+        }
+        let first = await group.next() ?? nil
+        group.cancelAll()
+        return first
     }
 }

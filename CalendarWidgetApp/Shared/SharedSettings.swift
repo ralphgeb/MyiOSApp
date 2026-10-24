@@ -169,6 +169,26 @@ enum SharedSettings {
         ignoreAppearance = false
     }
 
+    // MARK: Diagnostics (shown in Settings while testing)
+
+    /// Last weather error, or nil if the last lookup worked.
+    static var weatherError: String? {
+        get { defaults.string(forKey: "weatherError") }
+        set { defaults.set(newValue, forKey: "weatherError") }
+    }
+
+    /// When a weather lookup was last attempted (used to avoid retrying on every refresh).
+    static var weatherLastAttempt: Date {
+        get { Date(timeIntervalSince1970: defaults.double(forKey: "weatherLastAttempt")) }
+        set { defaults.set(newValue.timeIntervalSince1970, forKey: "weatherLastAttempt") }
+    }
+
+    /// Last arrow tap handled by the widget.
+    static var pagingLog: String? {
+        get { defaults.string(forKey: "pagingLog") }
+        set { defaults.set(newValue, forKey: "pagingLog") }
+    }
+
     // MARK: Weather cache (written by the widget)
 
     struct WeatherSnapshot: Codable {

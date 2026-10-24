@@ -21,6 +21,7 @@ struct ContentView: View {
     @EnvironmentObject private var location: LocationAccess
     @StateObject private var purchase = Store()
     @State private var showPaywall = false
+    @State private var diagnosticsTick = 0
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,7 @@ struct ContentView: View {
             customisationSection
             optionsSection
             weatherSection
+            diagnosticsSection
             Section {
             } footer: {
                 Text("To add the widget, touch and hold your Home Screen, tap the add button, then choose Upcoming Events.")
@@ -180,6 +182,29 @@ struct ContentView: View {
         } footer: {
             Text("Days shown includes today.")
         }
+    }
+
+    /// Testing aid: shows what the weather lookup and the widget arrows last did.
+    private var diagnosticsSection: some View {
+        Section {
+            if let error = SharedSettings.weatherError {
+                Text("Weather problem: \(error)").font(.footnote).foregroundStyle(.red)
+            } else if let snap = SharedSettings.weather {
+                Text("Weather OK, updated \(snap.fetched.formatted(date: .omitted, time: .shortened))")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else {
+                Text("Weather: no data yet").font(.footnote).foregroundStyle(.secondary)
+            }
+            Text("Last arrow tap: \(SharedSettings.pagingLog ?? "none yet")")
+                .font(.footnote).foregroundStyle(.secondary)
+            Button("Retry Weather Now") {
+                location.refreshWeather()
+                diagnosticsTick += 1
+            }
+        } header: {
+            Text("Diagnostics")
+        }
+        .id(diagnosticsTick)
     }
 
     /// The weather icon in the widget needs "While Using" location access.
@@ -352,8 +377,16 @@ final class LocationAccess: NSObject, ObservableObject, CLLocationManagerDelegat
         }
     }
 
+    private var force = false
+
     func request() {
         manager.requestWhenInUseAuthorization()
+    }
+
+    /// Look up the weather again right now, ignoring the 10-minute rule.
+    func refreshWeather() {
+        force = true
+        manager.requestLocation()
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -369,7 +402,8 @@ final class LocationAccess: NSObject, ObservableObject, CLLocationManagerDelegat
                                                                   lon: loc.coordinate.longitude)
         // Fetch the weather right away (instead of waiting for the widget's own refresh) so the
         // icon appears as soon as location is allowed. Skipped if the saved weather is under 10 minutes old.
-        if let saved = SharedSettings.weather, Date().timeIntervalSince(saved.fetched) < 10 * 60 { return }
+        if !force, let saved = SharedSettings.weather, Date().timeIntervalSince(saved.fetched) < 10 * 60 { return }
+        force = false
         Task {
             if let fresh = await WeatherFetcher.fetch(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) {
                 SharedSettings.weather = fresh

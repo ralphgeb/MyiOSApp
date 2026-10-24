@@ -78,7 +78,11 @@ struct Provider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<CalendarEntry>) -> Void) {
         Task {
             let events = fetchEvents()
-            let weather = includeWeather ? await WeatherProvider.current() : nil   // network only if the cache is over an hour old
+            // Weather must never hold up the widget: wait at most 5 seconds, then use the saved value.
+            var weather: SharedSettings.WeatherSnapshot? = nil
+            if includeWeather {
+                weather = await withTimeout(5) { await WeatherProvider.current() } ?? SharedSettings.weather
+            }   // network only if the cache is over an hour old
             let now = Date()
 
             // Battery: plan only the next few hours. One entry now, one at each event start/end
@@ -456,23 +460,20 @@ struct CalendarWidgetView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if canPageUp || canPageDown {
-                // Arrows look and sit exactly where they were, but each one has a much bigger
-                // invisible tap zone: the full strip height (upper half = up, lower half = down)
-                // and 44 pt wide. Negative padding keeps the arrow column's layout width unchanged.
+                // Small arrows with big tap zones (44 pt wide): top half pages up, bottom half pages down.
                 VStack(spacing: 0) {
                     Button(intent: PageIntent(target: pageIndex - 1, family: "\(family)")) {
                         Image(systemName: "chevron.up")
                             .opacity(canPageUp ? 1 : 0.3)
-                            .frame(width: 44, alignment: .center)
-                            .frame(maxHeight: .infinity, alignment: .top)
+                            .frame(width: 44, height: 70, alignment: .top)
                             .contentShape(Rectangle())
                     }
                     .disabled(!canPageUp)
+                    Spacer(minLength: 0)
                     Button(intent: PageIntent(target: pageIndex + 1, family: "\(family)")) {
                         Image(systemName: "chevron.down")
                             .opacity(canPageDown ? 1 : 0.3)
-                            .frame(width: 44, alignment: .center)
-                            .frame(maxHeight: .infinity, alignment: .bottom)
+                            .frame(width: 44, height: 70, alignment: .bottom)
                             .contentShape(Rectangle())
                     }
                     .disabled(!canPageDown)
@@ -481,7 +482,6 @@ struct CalendarWidgetView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(textColor.opacity(0.7))
                 .frame(width: 44)
-                .frame(maxHeight: .infinity)
                 .padding(.horizontal, -16)
             }
         }
