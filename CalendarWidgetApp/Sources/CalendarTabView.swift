@@ -80,7 +80,10 @@ struct CalendarTabView: View {
             Group {
                 if status == .fullAccess { list } else { unavailable }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            // Same title bar as Settings when access is missing, so both screens line up exactly.
+            .navigationTitle("Calendar")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(status == .fullAccess ? .hidden : .visible, for: .navigationBar)
         }
         .onAppear { colorTick += 1; load() }
         .onReceive(tick) { now = $0 }
@@ -90,17 +93,12 @@ struct CalendarTabView: View {
     }
 
     private var unavailable: some View {
-        ContentUnavailableView {
-            Label("Calendar Access Needed", systemImage: "calendar.badge.exclamationmark")
-        } description: {
-            Text("Allow calendar access to see your events here.")
-        } actions: {
-            Button("Open Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
+        CalendarAccessNeededView(status: status) {
+            Task {
+                _ = try? await store.requestFullAccessToEvents()
+                load()
+                SharedSettings.reloadWidgets()
             }
-            .buttonStyle(.borderedProminent)
         }
     }
 
@@ -218,6 +216,32 @@ struct RootView: View {
         }
         if location.status == .notDetermined {
             location.request()
+        }
+    }
+}
+
+/// The "Calendar Access Needed" screen, shared by the Calendar and Settings tabs so they look identical.
+struct CalendarAccessNeededView: View {
+    let status: EKAuthorizationStatus
+    let onAllow: () -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Calendar Access Needed", systemImage: "calendar.badge.exclamationmark")
+        } description: {
+            Text("Minimal needs access to your calendar to show your events.")
+        } actions: {
+            if status == .denied || status == .restricted {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                Button("Allow Calendar Access", action: onAllow)
+                    .buttonStyle(.borderedProminent)
+            }
         }
     }
 }

@@ -21,6 +21,8 @@ struct ContentView: View {
     @EnvironmentObject private var location: LocationAccess
     @StateObject private var purchase = Store()
     @State private var showPaywall = false
+    @State private var resetFlash = false
+    @State private var resetTick = 0
 
     var body: some View {
         NavigationStack {
@@ -56,27 +58,11 @@ struct ContentView: View {
 
     /// Standard empty state for a missing permission.
     private var accessNeeded: some View {
-        ContentUnavailableView {
-            Label("Calendar Access Needed", systemImage: "calendar.badge.exclamationmark")
-        } description: {
-            Text("The widget needs access to your calendar to show your events.")
-        } actions: {
-            if status == .denied || status == .restricted {
-                Button("Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-            } else {
-                Button("Allow Calendar Access") {
-                    Task {
-                        _ = try? await store.requestFullAccessToEvents()
-                        reload()
-                        scheduleWidgetReload()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
+        CalendarAccessNeededView(status: status) {
+            Task {
+                _ = try? await store.requestFullAccessToEvents()
+                reload()
+                scheduleWidgetReload()
             }
         }
     }
@@ -143,12 +129,27 @@ struct ContentView: View {
             locked(ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false))
             locked(Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
                 .disabled(!hasCustomColors))
-            locked(Button("Reset Colors", role: .destructive) {
+            locked(Button {
                 SharedSettings.resetColors()
                 syncColorState()
                 colorRefresh += 1
                 scheduleWidgetReload()
-            })
+                // Visible confirmation: the label turns into a green tick for a moment.
+                resetTick += 1
+                withAnimation { resetFlash = true }
+                Task {
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    withAnimation { resetFlash = false }
+                }
+            } label: {
+                if resetFlash {
+                    Label("Colours reset", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else {
+                    Text("Reset Colours to Default").foregroundStyle(.red)
+                }
+            }
+            .sensoryFeedback(.success, trigger: resetTick))
         } header: {
             HStack {
                 Text("Widget Customisation")
