@@ -55,7 +55,6 @@ enum SharedSettings {
         static let weather = "weatherSnapshot"
         static let coordinate = "lastCoordinate"
         static let isPro = "isPro"
-        static let testUnlock = "testUnlock"
     }
 
     // MARK: Purchase (written by the app, read by the widget)
@@ -65,12 +64,6 @@ enum SharedSettings {
     static var isPro: Bool {
         get { defaults.bool(forKey: Key.isPro) }
         set { defaults.set(newValue, forKey: Key.isPro) }
-    }
-
-    /// TestFlight-only shortcut used before the product exists in App Store Connect.
-    static var testUnlock: Bool {
-        get { defaults.bool(forKey: Key.testUnlock) }
-        set { defaults.set(newValue, forKey: Key.testUnlock) }
     }
 
     // MARK: Calendars and options
@@ -169,24 +162,10 @@ enum SharedSettings {
         ignoreAppearance = false
     }
 
-    // MARK: Diagnostics (shown in Settings while testing)
-
-    /// Last weather error, or nil if the last lookup worked.
-    static var weatherError: String? {
-        get { defaults.string(forKey: "weatherError") }
-        set { defaults.set(newValue, forKey: "weatherError") }
-    }
-
     /// When a weather lookup was last attempted (used to avoid retrying on every refresh).
     static var weatherLastAttempt: Date {
         get { Date(timeIntervalSince1970: defaults.double(forKey: "weatherLastAttempt")) }
         set { defaults.set(newValue.timeIntervalSince1970, forKey: "weatherLastAttempt") }
-    }
-
-    /// Last arrow tap handled by the widget.
-    static var pagingLog: String? {
-        get { defaults.string(forKey: "pagingLog") }
-        set { defaults.set(newValue, forKey: "pagingLog") }
     }
 
     // MARK: Weather cache (written by the widget)

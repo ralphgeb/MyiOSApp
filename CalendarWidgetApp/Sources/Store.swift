@@ -16,13 +16,6 @@ final class Store: ObservableObject {
 
     private var updates: Task<Void, Never>?
 
-    /// TestFlight builds use Apple's sandbox, where purchases cost nothing.
-    var isSandbox: Bool { Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" }
-
-    /// Lets you test the locked/unlocked behaviour before the product exists in App Store Connect.
-    /// Only shown in TestFlight, and only while the real product can't be loaded.
-    var canTestUnlock: Bool { isSandbox && product == nil }
-
     init() {
         updates = Task { [weak self] in
             for await result in StoreKit.Transaction.updates {
@@ -42,7 +35,7 @@ final class Store: ObservableObject {
                 owned = true
             }
         }
-        setPro(owned || SharedSettings.testUnlock)
+        setPro(owned)
     }
 
     func buy() async {
@@ -69,12 +62,6 @@ final class Store: ObservableObject {
         try? await AppStore.sync()
         await refresh()
         if !isPro { message = "No previous purchase was found for this Apple ID." }
-    }
-
-    /// TestFlight only, and only while the product isn't set up yet.
-    func testUnlock() {
-        SharedSettings.testUnlock = true
-        setPro(true)
     }
 
     private func handle(_ result: VerificationResult<StoreKit.Transaction>) async {
@@ -138,10 +125,6 @@ struct PaywallView: View {
                     Button("Restore Purchase") { Task { await store.restore() } }
                         .disabled(store.isBusy)
 
-                    if store.canTestUnlock {
-                        Button("Unlock for Testing (TestFlight only)") { store.testUnlock() }
-                            .font(.footnote)
-                    }
                 }
 
                 if let message = store.message {

@@ -9,12 +9,10 @@ enum WeatherFetcher {
         do {
             let weather = try await WeatherService.shared.weather(for: CLLocation(latitude: lat, longitude: lon),
                                                                    including: .current)
-            SharedSettings.weatherError = nil
             return SharedSettings.WeatherSnapshot(code: wmoCode(for: weather.condition.rawValue),
                                                   isDay: weather.isDaylight,
                                                   fetched: Date())
         } catch {
-            SharedSettings.weatherError = String(String(describing: error).prefix(300))
             return nil
         }
     }
