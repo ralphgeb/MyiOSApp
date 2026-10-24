@@ -363,7 +363,7 @@ struct CalendarTabView: View {
                     .font(.system(size: 32, weight: .thin))
             }
             Spacer()
-            if let snap = SharedSettings.weather, Date().timeIntervalSince(snap.fetched) < 3 * 3600 {
+            if let snap = SharedSettings.weather(at: now) {
                 WeatherIconView(name: snap.iconName, color: textColor, size: 43)
             }
         }

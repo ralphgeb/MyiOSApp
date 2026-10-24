@@ -4,30 +4,26 @@ import CoreLocation
 /// Current weather for where the user is, using the free Open-Meteo service
 /// (no account or key needed). Results are cached in the App Group.
 enum WeatherProvider {
-    static func current() async -> SharedSettings.WeatherSnapshot? {
-        let cached = SharedSettings.weather
-        // Weather updates once an hour: reuse the saved value until it is 60 minutes old.
-        if let cached, Date().timeIntervalSince(cached.fetched) < 60 * 60 {
-            return cached
+    /// Makes sure the saved 24-hour forecast is good enough. It only calls WeatherKit when the
+    /// saved hours are running out or the phone has moved a long way (see `weatherNeedsRefresh`).
+    static func refreshIfNeeded() async {
+        // Checking where the phone is costs a little battery, so do it at most every 2 hours.
+        let lastCheck = Date(timeIntervalSince1970: UserDefaults(suiteName: SharedSettings.appGroup)?
+            .double(forKey: "weatherLastLocationCheck") ?? 0)
+        let haveForecast = SharedSettings.forecast.map { $0.coveredUntil > Date() } ?? false
+        if haveForecast, Date().timeIntervalSince(lastCheck) < 2 * 3600,
+           let saved = SharedSettings.lastCoordinate,
+           !SharedSettings.weatherNeedsRefresh(lat: saved.lat, lon: saved.lon) {
+            return
         }
+        UserDefaults(suiteName: SharedSettings.appGroup)?
+            .set(Date().timeIntervalSince1970, forKey: "weatherLastLocationCheck")
 
-        // Never slow the widget down: after an attempt, wait 15 minutes before trying again,
-        // so taps on the arrows and other refreshes stay instant even if the lookup fails.
-        if Date().timeIntervalSince(SharedSettings.weatherLastAttempt) < 15 * 60 {
-            if let cached, Date().timeIntervalSince(cached.fetched) < 3 * 3600 { return cached }
-            return nil
+        guard let coord = await LocationProvider.coordinate(),
+              SharedSettings.weatherNeedsRefresh(lat: coord.lat, lon: coord.lon) else { return }
+        if let fresh = await WeatherFetcher.fetch(lat: coord.lat, lon: coord.lon) {
+            SharedSettings.forecast = fresh
         }
-        SharedSettings.weatherLastAttempt = Date()
-
-        if let coord = await LocationProvider.coordinate(),
-           let fresh = await WeatherFetcher.fetch(lat: coord.lat, lon: coord.lon) {
-            SharedSettings.weather = fresh
-            return fresh
-        }
-
-        // Offline or no location: keep showing a recent value rather than nothing.
-        if let cached, Date().timeIntervalSince(cached.fetched) < 3 * 3600 { return cached }
-        return nil
     }
 }
 

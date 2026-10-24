@@ -380,12 +380,13 @@ final class LocationAccess: NSObject, ObservableObject, CLLocationManagerDelegat
         guard let loc = locations.last else { return }
         SharedSettings.lastCoordinate = SharedSettings.Coordinate(lat: loc.coordinate.latitude,
                                                                   lon: loc.coordinate.longitude)
-        // Fetch the weather right away (instead of waiting for the widget's own refresh) so the
-        // icon appears as soon as location is allowed. Skipped if the saved weather is under 10 minutes old.
-        if let saved = SharedSettings.weather, Date().timeIntervalSince(saved.fetched) < 10 * 60 { return }
+        // Fetch the 24-hour forecast right away so the icon appears as soon as location is allowed,
+        // but only if the saved one is missing, running out, or for a different place.
+        let lat = loc.coordinate.latitude, lon = loc.coordinate.longitude
+        guard SharedSettings.weatherNeedsRefresh(lat: lat, lon: lon) else { return }
         Task {
-            if let fresh = await WeatherFetcher.fetch(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) {
-                SharedSettings.weather = fresh
+            if let fresh = await WeatherFetcher.fetch(lat: lat, lon: lon) {
+                SharedSettings.forecast = fresh
                 SharedSettings.reloadWidgets()
                 NotificationCenter.default.post(name: .weatherUpdated, object: nil)
             }

@@ -5,13 +5,21 @@ import WeatherKit
 /// Looks up the current weather with Apple WeatherKit (free with the developer account).
 /// Used by the widget and by the app, so the icon can appear as soon as location is allowed.
 enum WeatherFetcher {
-    static func fetch(lat: Double, lon: Double) async -> SharedSettings.WeatherSnapshot? {
+    /// One WeatherKit call (hourly data only) gives the next 24 hours.
+    static func fetch(lat: Double, lon: Double) async -> SharedSettings.WeatherForecast? {
+        SharedSettings.weatherLastAttempt = Date()
         do {
-            let weather = try await WeatherService.shared.weather(for: CLLocation(latitude: lat, longitude: lon),
-                                                                   including: .current)
-            return SharedSettings.WeatherSnapshot(code: wmoCode(for: weather.condition.rawValue),
-                                                  isDay: weather.isDaylight,
-                                                  fetched: Date())
+            let hourly = try await WeatherService.shared.weather(for: CLLocation(latitude: lat, longitude: lon),
+                                                                  including: .hourly)
+            let now = Date()
+            let hours = hourly.forecast
+                .filter { $0.date.addingTimeInterval(3600) > now }
+                .prefix(24)
+                .map { SharedSettings.WeatherForecast.Hour(start: $0.date,
+                                                           code: wmoCode(for: $0.condition.rawValue),
+                                                           isDay: $0.isDaylight) }
+            guard !hours.isEmpty else { return nil }
+            return SharedSettings.WeatherForecast(fetched: now, lat: lat, lon: lon, hours: Array(hours))
         } catch {
             return nil
         }

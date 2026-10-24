@@ -71,7 +71,7 @@ struct Provider: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (CalendarEntry) -> Void) {
         let events = context.isPreview ? Self.sample : fetchEvents()
         completion(makeEntry(date: .now, events: events,
-                             weather: includeWeather ? SharedSettings.weather : nil,
+                             weather: includeWeather ? SharedSettings.weather(at: .now) : nil,
                              preview: context.isPreview, family: context.family))
     }
 
@@ -79,10 +79,12 @@ struct Provider: TimelineProvider {
         Task {
             let events = fetchEvents()
             // Weather must never hold up the widget: wait at most 5 seconds, then use the saved value.
-            var weather: SharedSettings.WeatherSnapshot? = nil
             if includeWeather {
-                weather = await withTimeout(5) { await WeatherProvider.current() } ?? SharedSettings.weather
-            }   // network only if the cache is over an hour old
+                _ = await withTimeout(5) { () async -> Bool? in
+                    await WeatherProvider.refreshIfNeeded()
+                    return true
+                }
+            }   // WeatherKit is only called when the saved 24 hours are running out
             let now = Date()
 
             // Battery: plan only the next few hours. One entry now, one at each event start/end
@@ -99,7 +101,9 @@ struct Provider: TimelineProvider {
                 times.insert(midnight)
             }
             let entries = times.sorted().prefix(16).map {
-                makeEntry(date: $0, events: events, weather: weather, family: context.family)
+                makeEntry(date: $0, events: events,
+                          weather: includeWeather ? SharedSettings.weather(at: $0) : nil,
+                          family: context.family)
             }
             completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60))))
         }

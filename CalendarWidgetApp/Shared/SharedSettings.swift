@@ -53,6 +53,7 @@ enum SharedSettings {
         static let colorsDark = "colorsDark"
         static let ignoreAppearance = "ignoreAppearance"
         static let weather = "weatherSnapshot"
+        static let forecast = "weatherForecast24"
         static let coordinate = "lastCoordinate"
         static let isPro = "isPro"
     }
@@ -182,9 +183,52 @@ enum SharedSettings {
         var lon: Double
     }
 
-    static var weather: WeatherSnapshot? {
-        get { load(Key.weather) }
-        set { save(newValue, Key.weather) }
+    /// The next 24 hours of weather from a single WeatherKit call, saved on the phone.
+    /// Widgets pick the icon for the hour they are drawn at, so no new call is needed during the day.
+    struct WeatherForecast: Codable {
+        struct Hour: Codable {
+            var start: Date
+            var code: Int
+            var isDay: Bool
+        }
+        var fetched: Date
+        var lat: Double
+        var lon: Double
+        var hours: [Hour]
+
+        /// When the saved hours run out.
+        var coveredUntil: Date { (hours.last?.start ?? .distantPast).addingTimeInterval(3600) }
+    }
+
+    static var forecast: WeatherForecast? {
+        get { load(Key.forecast) }
+        set { save(newValue, Key.forecast) }
+    }
+
+    /// The weather for the hour containing `date`, or nil if the saved forecast doesn't cover it.
+    static func weather(at date: Date) -> WeatherSnapshot? {
+        guard let f = forecast,
+              let h = f.hours.last(where: { $0.start <= date }),
+              date < h.start.addingTimeInterval(3600) else { return nil }
+        return WeatherSnapshot(code: h.code, isDay: h.isDay, fetched: f.fetched)
+    }
+
+    static var weather: WeatherSnapshot? { weather(at: Date()) }
+
+    /// Cost rules: ask WeatherKit again only when the saved hours are about to run out
+    /// (under 4 hours left), or the phone has moved more than 10 km. Never overnight while
+    /// the saved hours still cover it, and never twice within 15 minutes.
+    static func weatherNeedsRefresh(lat: Double, lon: Double, now: Date = Date()) -> Bool {
+        if now.timeIntervalSince(weatherLastAttempt) < 15 * 60 { return false }
+        guard let f = forecast else { return true }
+        let left = f.coveredUntil.timeIntervalSince(now)
+        if left <= 0 { return true }
+        let moved = CLLocation(latitude: lat, longitude: lon)
+            .distance(from: CLLocation(latitude: f.lat, longitude: f.lon))
+        if moved > 10_000 { return true }
+        let hour = Calendar.current.component(.hour, from: now)
+        if (hour >= 23 || hour < 6) && left > 3600 { return false }
+        return left < 4 * 3600
     }
 
     static var lastCoordinate: Coordinate? {
