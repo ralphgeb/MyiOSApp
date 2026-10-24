@@ -57,6 +57,7 @@ struct CalendarTabView: View {
     private func load() {
         status = EKEventStore.authorizationStatus(for: .event)
         guard status == .fullAccess else { events = []; return }
+        store.refreshSourcesIfNecessary()
         let cal = Calendar.current
         let start = gridStart
         guard let end = cal.date(byAdding: .day, value: 1, to: lastListDay) else { return }
@@ -109,11 +110,10 @@ struct CalendarTabView: View {
     private var list: some View {
         let cal = Calendar.current
         let all = groups
-        let c = collapse
         return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Color.clear.frame(height: dateHeaderHeight + calendarHeight(collapse: 0))
+                    Color.clear.frame(height: dateHeaderHeight + calendarHeight(scroll: 0))
                     VStack(alignment: .leading, spacing: 0) {
                         if all.first.map({ !cal.isDate($0.day, inSameDayAs: now) }) ?? true {
                             Text(all.isEmpty ? "No upcoming events" : "No more events today")
@@ -177,7 +177,7 @@ struct CalendarTabView: View {
                                     .onChange(of: geo.size.height) { _, h in dateHeaderHeight = h }
                             }
                         }
-                    calendarBlock(groups: all, collapse: c) { day in
+                    calendarBlock(groups: all) { day in
                         // Jump to that day, or the next day that has events.
                         guard day >= cal.startOfDay(for: now),
                               let target = all.first(where: { $0.day >= day }) else { return }
@@ -196,7 +196,9 @@ struct CalendarTabView: View {
 
     private let rowH: CGFloat = 40
     private let letterH: CGFloat = 20
-    private let circle: CGFloat = 26
+    private let circle: CGFloat = 24
+    private let topPad: CGFloat = 10
+    private let bottomPad: CGFloat = 20
 
     private var cal: Calendar { Calendar.current }
     private var todayStart: Date { cal.startOfDay(for: now) }
@@ -217,19 +219,21 @@ struct CalendarTabView: View {
     private var monthRows: Int { (dayIndex(monthEnd) + 1 + 6) / 7 }
     private var todayRow: Int { dayIndex(todayStart) / 7 }
 
-    /// 0 = whole month showing, 1 = only the current week.
-    private var collapse: CGFloat {
-        let dist = rowH * CGFloat(max(monthRows - 1, 1))
-        return max(0, min(scrollY / dist, 1))
+    /// How far the list has scrolled while the month is still folding (0 ... until one week is left).
+    private func foldScroll(_ s: CGFloat) -> CGFloat {
+        max(0, min(s, rowH * CGFloat(max(monthRows - 1, 0))))
     }
-    private func calendarHeight(collapse c: CGFloat) -> CGFloat {
-        letterH + rowH * (1 + CGFloat(monthRows - 1) * (1 - c)) + 1
+    private func gridHeight(scroll s: CGFloat) -> CGFloat {
+        max(rowH, CGFloat(monthRows) * rowH - foldScroll(s))
+    }
+    private func calendarHeight(scroll s: CGFloat) -> CGFloat {
+        topPad + letterH + gridHeight(scroll: s) + bottomPad + 1
     }
 
     /// How far down the list the reader is, in days from the start of the grid (fractional so the strip glides).
-    private func dayPosition(_ groups: [(day: Date, events: [AppEvent])], collapse c: CGFloat) -> CGFloat {
+    private func dayPosition(_ groups: [(day: Date, events: [AppEvent])]) -> CGFloat {
         let todayIdx = CGFloat(dayIndex(todayStart))
-        let headerBottom = dateHeaderHeight + calendarHeight(collapse: c)
+        let headerBottom = dateHeaderHeight + calendarHeight(scroll: scrollY)
         let pts = groups.compactMap { g -> (y: CGFloat, d: CGFloat)? in
             guard let y = dayTops[g.day] else { return nil }
             return (y, CGFloat(dayIndex(g.day)))
@@ -246,23 +250,26 @@ struct CalendarTabView: View {
         return pts.last!.d
     }
 
-    private func calendarBlock(groups: [(day: Date, events: [AppEvent])], collapse c: CGFloat,
+    private func calendarBlock(groups: [(day: Date, events: [AppEvent])],
                                jump: @escaping (Date) -> Void) -> some View {
         let total = totalDays
-        let p = max(0, min(dayPosition(groups, collapse: c), CGFloat(total - 1)))
+        let p = max(0, min(dayPosition(groups), CGFloat(total - 1)))
         let current = Int(p.rounded())
         let todayIdx = dayIndex(todayStart)
         let rowStart = CGFloat(todayRow * 7)
-        // The week slides sideways once the month has folded away, keeping the first-seen day in view.
-        let slid = max(rowStart, min(p - 3, CGFloat(total - 7)))
-        let ws = rowStart * (1 - c) + slid * c
-        let counts = Dictionary(grouping: events) { cal.startOfDay(for: $0.start) }.mapValues { $0.count }
+        let sc = foldScroll(scrollY)
+        let foldDist = rowH * CGFloat(max(monthRows - 1, 1))
+        let c = monthRows > 1 ? sc / foldDist : 1
+        // The orange day drifts to the left edge as the month folds, then stays there while the days slide.
+        let ws = rowStart * (1 - c) + min(p, CGFloat(total - 7)) * c
+        let upcoming = events.filter { $0.end > now }
+        let counts = Dictionary(grouping: upcoming) { cal.startOfDay(for: $0.start) }.mapValues { $0.count }
         let days: [Date] = (0..<total).map { cal.date(byAdding: .day, value: $0, to: gridStart) ?? gridStart }
 
         func cell(_ i: Int, width: CGFloat) -> some View {
             let isCurrent = i == current
             let n = min(counts[days[i]] ?? 0, 3)
-            return VStack(spacing: 2) {
+            return VStack(spacing: 5) {
                 ZStack {
                     if isCurrent { Circle().fill(highlight) }
                     Text(days[i].formatted(.dateTime.day()))
@@ -286,6 +293,7 @@ struct CalendarTabView: View {
             let w = geo.size.width
             let cw = (w - 30) / 7
             VStack(spacing: 0) {
+                Color.clear.frame(height: topPad)
                 // Weekday letters slide with the week row.
                 HStack(spacing: 0) {
                     ForEach(0..<total, id: \.self) { i in
@@ -299,36 +307,39 @@ struct CalendarTabView: View {
                 .frame(width: w, height: letterH, alignment: .leading)
                 .clipped()
 
-                VStack(spacing: 0) {
+                // The rows move up with the list; this week's row stops at the top and the rest slide away.
+                ZStack(alignment: .topLeading) {
                     ForEach(0..<monthRows, id: \.self) { r in
-                        Group {
-                            if r == todayRow {
-                                HStack(spacing: 0) {
-                                    ForEach(0..<total, id: \.self) { i in cell(i, width: cw) }
-                                }
-                                .offset(x: 15 - ws * cw)
-                                .frame(width: w, height: rowH, alignment: .leading)
-                                .clipped()
-                            } else {
-                                HStack(spacing: 0) {
-                                    ForEach(0..<7, id: \.self) { k in
-                                        let i = r * 7 + k
-                                        if i < total { cell(i, width: cw) } else { Color.clear.frame(width: cw, height: rowH) }
-                                    }
-                                }
-                                .padding(.horizontal, 15)
-                                .frame(width: w, height: rowH, alignment: .leading)
-                                .opacity(1 - c)
+                        let y = CGFloat(r) * rowH - sc
+                        if r == todayRow {
+                            HStack(spacing: 0) {
+                                ForEach(0..<total, id: \.self) { i in cell(i, width: cw) }
                             }
+                            .offset(x: 15 - ws * cw)
+                            .frame(width: w, height: rowH, alignment: .leading)
+                            .clipped()
+                            .background(pageBackground)
+                            .offset(y: max(y, 0))
+                            .zIndex(1)
+                        } else {
+                            HStack(spacing: 0) {
+                                ForEach(0..<7, id: \.self) { k in
+                                    let i = r * 7 + k
+                                    if i < total { cell(i, width: cw) } else { Color.clear.frame(width: cw, height: rowH) }
+                                }
+                            }
+                            .padding(.horizontal, 15)
+                            .frame(width: w, height: rowH, alignment: .leading)
+                            .offset(y: y)
                         }
                     }
                 }
-                .offset(y: -CGFloat(todayRow) * rowH * c)
-                .frame(width: w, height: rowH * (1 + CGFloat(monthRows - 1) * (1 - c)), alignment: .top)
+                .frame(width: w, height: gridHeight(scroll: scrollY), alignment: .topLeading)
                 .clipped()
+                Color.clear.frame(height: bottomPad)
             }
         }
-        .frame(height: calendarHeight(collapse: c) - 1)
+        .frame(height: calendarHeight(scroll: scrollY) - 1)
         .padding(.bottom, 1)
         .background(pageBackground)
         .overlay(alignment: .bottom) { Rectangle().fill(textColor.opacity(0.25)).frame(height: 1 / displayScale) }
