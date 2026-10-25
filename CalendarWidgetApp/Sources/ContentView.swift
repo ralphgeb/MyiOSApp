@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var hidden = SharedSettings.hiddenCalendarIDs
     @State private var daysAhead = SharedSettings.daysAhead
     @State private var showAllDay = SharedSettings.showAllDay
+    @State private var weatherFetched: Date? = SharedSettings.forecast?.fetched
     @State private var ignoreAppearance = SharedSettings.ignoreAppearance
     @State private var hasCustomColors = SharedSettings.hasCustomColors
     @State private var colorRefresh = 0          // bumped to redraw the color pickers
@@ -36,6 +37,9 @@ struct ContentView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)   // compact title instead of the large one
             .onAppear(perform: reload)
+            .onReceive(NotificationCenter.default.publisher(for: .weatherUpdated)) { _ in
+                weatherFetched = SharedSettings.forecast?.fetched
+            }
             .sheet(isPresented: $showPaywall) { PaywallView(store: purchase) }
         }
     }
@@ -51,7 +55,14 @@ struct ContentView: View {
             weatherSection
             Section {
             } footer: {
-                Text("To add the widget, touch and hold your Home Screen, tap the add button, then choose Upcoming Events.")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("To add the widget, touch and hold your Home Screen, tap the add button, then choose Upcoming Events.")
+                    if let d = weatherFetched {
+                        Text("Weather last requested from Apple Weather on \(d.formatted(.dateTime.day().month(.abbreviated).hour().minute())).")
+                    } else {
+                        Text("Weather hasn't been requested from Apple Weather yet.")
+                    }
+                }
             }
         }
     }
@@ -204,7 +215,7 @@ struct ContentView: View {
         } header: {
             Text("Weather")
         } footer: {
-            Text("Shows the weather where you are, as an icon at the top of the widget. Choose \"Allow While Using App\" (not \"Allow Once\"). It updates once an hour.")
+            Text("Shows the weather where you are, as an icon at the top of the widget. Choose \"Allow While Using App\" (not \"Allow Once\"). It refreshes a few times a day.")
         }
     }
 
@@ -278,6 +289,7 @@ struct ContentView: View {
         if status == .fullAccess {
             calendars = store.calendars(for: .event)
         }
+        weatherFetched = SharedSettings.forecast?.fetched
         syncColorState()
     }
 
