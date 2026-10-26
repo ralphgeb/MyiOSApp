@@ -24,7 +24,7 @@ struct LookPreset: Identifiable {
     let dark: (ink: RGBA, background: RGBA, card: RGBA)
     let accent: RGBA
 
-    private func set(_ p: (ink: RGBA, background: RGBA, card: RGBA)) -> SharedSettings.ColorSet {
+    private func makeSet(_ p: (ink: RGBA, background: RGBA, card: RGBA)) -> SharedSettings.ColorSet {
         var s = SharedSettings.ColorSet()
         s.background = p.background
         s.text = p.ink
@@ -34,8 +34,8 @@ struct LookPreset: Identifiable {
         return s
     }
 
-    var lightSet: SharedSettings.ColorSet { set(light) }
-    var darkSet: SharedSettings.ColorSet { set(dark) }
+    var lightSet: SharedSettings.ColorSet { makeSet(light) }
+    var darkSet: SharedSettings.ColorSet { makeSet(dark) }
 
     static let all: [LookPreset] = [
         LookPreset(id: "graphite", name: "Graphite",
@@ -69,31 +69,31 @@ struct LookPreset: Identifiable {
 struct AppTheme {
     let scheme: ColorScheme
 
-    private var set: SharedSettings.ColorSet {
+    private var colors: SharedSettings.ColorSet {
         SharedSettings.isPro ? SharedSettings.colorSettings.resolved(for: scheme) : SharedSettings.ColorSet()
     }
 
-    var ink: Color { set.text?.color ?? .primary }
-    var accent: Color { set.highlight?.color ?? .orange }
-    var accentText: Color { set.highlightText?.color ?? .black }
+    var ink: Color { colors.text?.color ?? .primary }
+    var accent: Color { colors.highlight?.color ?? .orange }
+    var accentText: Color { colors.highlightText?.color ?? .black }
 
     var background: Color {
-        set.background?.color ?? (scheme == .dark ? Color(red: 0.11, green: 0.11, blue: 0.118) : Color(.systemBackground))
+        colors.background?.color ?? (scheme == .dark ? Color(red: 0.11, green: 0.11, blue: 0.118) : Color(.systemBackground))
     }
 
     /// Rows and cards: the chosen card color, or a soft step away from the background.
     var card: Color {
-        if let c = set.card { return c.color }
-        if let bg = set.background {
+        if let c = colors.card { return c.color }
+        if let bg = colors.background {
             let fallbackInk = bg.luminance > 0.5 ? RGBA(hex: 0x000000) : RGBA(hex: 0xFFFFFF)
-            return bg.mixed(with: set.text ?? fallbackInk, 0.07).color
+            return bg.mixed(with: colors.text ?? fallbackInk, 0.07).color
         }
         return scheme == .dark ? Color(white: 0.17) : Color(.secondarySystemBackground)
     }
 
     /// For the title bar: nil while the original look is on (the system decides).
     var barScheme: ColorScheme? {
-        guard let bg = set.background else { return nil }
+        guard let bg = colors.background else { return nil }
         return bg.luminance > 0.5 ? .light : .dark
     }
 }
