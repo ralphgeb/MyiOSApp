@@ -155,6 +155,7 @@ struct ContentView: View {
             locked(ColorPicker("Cards", selection: cardBinding, supportsOpacity: false))
             preview
             locked(Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
+                .tint(theme.accent)
                 .disabled(!hasCustomColors))
             locked(Button {
                 SharedSettings.resetColors()
@@ -269,6 +270,7 @@ struct ContentView: View {
                     scheduleWidgetReload()
                 })
             locked(Toggle("Show All-Day Events", isOn: $showAllDay)
+                .tint(theme.accent)
                 .onChange(of: showAllDay) { _, new in
                     SharedSettings.showAllDay = new
                     scheduleWidgetReload()
@@ -426,6 +428,7 @@ struct CalendarTogglesView: View {
                                     .imageScale(.small)
                             }
                         }
+                        .tint(theme.accent)
                         // Locked: tapping a calendar opens the unlock window instead of switching it.
                         .allowsHitTesting(isUnlocked)
                         .overlay {
