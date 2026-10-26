@@ -412,6 +412,8 @@ struct CalendarTabView: View {
 struct RootView: View {
     private let store = EKEventStore()
     @EnvironmentObject private var location: LocationAccess
+    @Environment(\.colorScheme) private var scheme
+    @State private var themeTick = 0
 
     var body: some View {
         TabView {
@@ -420,6 +422,9 @@ struct RootView: View {
             ContentView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        // The selected tab uses your main color (not system blue), like the sister app.
+        .tint({ _ = themeTick; return AppTheme(scheme: scheme).ink }())
+        .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in themeTick += 1 }
         .task { await askForPermissions() }
     }
 

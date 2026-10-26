@@ -99,7 +99,8 @@ enum SharedSettings {
         var text: RGBA?
         var highlight: RGBA?      // color of the event happening now (default orange)
         var highlightText: RGBA?  // number inside the orange circle in the app's calendar (default black)
-        var isEmpty: Bool { background == nil && text == nil && highlight == nil && highlightText == nil }
+        var card: RGBA?           // rows and cards in the app's Settings (not used by widgets)
+        var isEmpty: Bool { background == nil && text == nil && highlight == nil && highlightText == nil && card == nil }
     }
 
     /// Everything the widget needs to pick its colors.
@@ -142,6 +143,7 @@ enum SharedSettings {
     }
 
     static func updateColors(for scheme: ColorScheme, _ change: (inout ColorSet) -> Void) {
+        presetID = "custom"
         let key = ignoreAppearance ? Key.colorsBoth : (scheme == .dark ? Key.colorsDark : Key.colorsLight)
         var set: ColorSet = load(key) ?? ColorSet()
         change(&set)
@@ -157,8 +159,24 @@ enum SharedSettings {
         ignoreAppearance = on
     }
 
+    /// Which ready-made look is on ("custom" once any color is changed by hand, nil = original).
+    static var presetID: String? {
+        get { defaults.string(forKey: "colorPresetID") }
+        set { defaults.set(newValue, forKey: "colorPresetID") }
+    }
+
+    /// Applies a ready-made look to both Light and Dark mode.
+    static func applyPreset(id: String, light: ColorSet, dark: ColorSet) {
+        save(light, Key.colorsLight)
+        save(dark, Key.colorsDark)
+        save(nil as ColorSet?, Key.colorsBoth)
+        ignoreAppearance = false
+        presetID = id
+    }
+
     /// Back to the original look, and the toggle goes off.
     static func resetColors() {
+        presetID = nil
         save(nil as ColorSet?, Key.colorsBoth)
         save(nil as ColorSet?, Key.colorsLight)
         save(nil as ColorSet?, Key.colorsDark)

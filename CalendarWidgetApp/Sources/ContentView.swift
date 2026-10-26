@@ -18,12 +18,18 @@ struct ContentView: View {
     @State private var ignoreAppearance = SharedSettings.ignoreAppearance
     @State private var hasCustomColors = SharedSettings.hasCustomColors
     @State private var colorRefresh = 0          // bumped to redraw the color pickers
+    @State private var paletteTick = 0           // bumped whenever a color changes, so the page redraws
     @State private var pendingReload: Task<Void, Never>?
     @EnvironmentObject private var location: LocationAccess
     @StateObject private var purchase = Store()
     @State private var showPaywall = false
     @State private var resetFlash = false
     @State private var resetTick = 0
+
+    private var theme: AppTheme {
+        _ = paletteTick
+        return AppTheme(scheme: scheme)
+    }
 
     var body: some View {
         NavigationStack {
@@ -36,6 +42,7 @@ struct ContentView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)   // compact title instead of the large one
+            .toolbarColorScheme(theme.barScheme, for: .navigationBar)
             .onAppear(perform: reload)
             .onReceive(NotificationCenter.default.publisher(for: .weatherUpdated)) { _ in
                 weatherFetched = SharedSettings.forecast?.fetched
@@ -48,11 +55,11 @@ struct ContentView: View {
 
     private var settingsForm: some View {
         Form {
-            unlockSection
-            calendarsSection
-            customizationSection
-            optionsSection
-            weatherSection
+            unlockSection.listRowBackground(theme.card)
+            calendarsSection.listRowBackground(theme.card)
+            customizationSection.listRowBackground(theme.card)
+            optionsSection.listRowBackground(theme.card)
+            weatherSection.listRowBackground(theme.card)
             Section {
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
@@ -65,6 +72,10 @@ struct ContentView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(theme.background.ignoresSafeArea())
+        .foregroundStyle(theme.ink)
+        .tint(theme.ink)
     }
 
     /// Standard empty state for a missing permission.
@@ -135,10 +146,13 @@ struct ContentView: View {
 
     private var customizationSection: some View {
         Section {
+            locked(presetsRow)
             locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: false))
             locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
             locked(ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false))
             locked(ColorPicker("Highlighted Date Text", selection: highlightTextBinding, supportsOpacity: false))
+            locked(ColorPicker("Cards", selection: cardBinding, supportsOpacity: false))
+            preview
             locked(Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
                 .disabled(!hasCustomColors))
             locked(Button {
@@ -164,13 +178,86 @@ struct ContentView: View {
             .sensoryFeedback(.success, trigger: resetTick))
         } header: {
             HStack {
-                Text("Widget Customization")
+                Text("Appearance")
                 if !purchase.isPro { Image(systemName: "lock.fill").imageScale(.small) }
             }
         } footer: {
-            Text("Pick solid colors for the widget. Turn the switch on to use them in Light and Dark mode. Reset turns it off.")
+            Text("Pick a look or choose your own colors. They apply to the widgets and the Calendar tab. Turn the switch on to use the same colors in Light and Dark mode. Reset goes back to the original.")
         }
         .id(colorRefresh)
+    }
+
+    /// Ready-made looks, same set as the sister app.
+    private var presetsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                ForEach(LookPreset.all) { p in
+                    let c = scheme == .dark ? p.dark : p.light
+                    let selected = SharedSettings.presetID == p.id
+                    Button {
+                        withAnimation(.snappy) {
+                            SharedSettings.applyPreset(id: p.id, light: p.lightSet, dark: p.darkSet)
+                            syncColorState()
+                            colorRefresh += 1
+                        }
+                        scheduleWidgetReload()
+                    } label: {
+                        VStack(spacing: 6) {
+                            ZStack {
+                                Circle().fill(c.background.color)
+                                Circle().inset(by: 7).trim(from: 0, to: 0.72)
+                                    .stroke(c.ink.color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                                    .rotationEffect(.degrees(-90))
+                                Circle().fill(p.accent.color).frame(width: 9, height: 9)
+                            }
+                            .frame(width: 52, height: 52)
+                            .overlay(Circle().stroke(selected ? theme.accent : theme.ink.opacity(0.12),
+                                                     lineWidth: selected ? 2 : 1))
+                            Text(p.name)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(theme.ink.opacity(0.5))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    /// A small sample of the highlighted date, so changes are easy to judge.
+    private var preview: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(theme.accent)
+                Text(Date().formatted(.dateTime.day()))
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(theme.accentText)
+            }
+            .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(Date().formatted(.dateTime.weekday(.wide)))
+                    .font(.system(size: 17, weight: .bold))
+                Text(Date().formatted(.dateTime.day().month(.wide)))
+                    .font(.system(size: 17, weight: .thin))
+            }
+            Spacer()
+            Text("PREVIEW")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(1.1)
+                .foregroundStyle(theme.ink.opacity(0.5))
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var cardBinding: Binding<Color> {
+        Binding(
+            get: { theme.card },
+            set: { new in
+                SharedSettings.updateColors(for: scheme) { $0.card = RGBA(new) }
+                syncColorState()
+            }
+        )
     }
 
     private var optionsSection: some View {
@@ -280,6 +367,8 @@ struct ContentView: View {
     private func syncColorState() {
         ignoreAppearance = SharedSettings.ignoreAppearance
         hasCustomColors = SharedSettings.hasCustomColors
+        paletteTick += 1
+        NotificationCenter.default.post(name: .colorsChanged, object: nil)
     }
 
     // MARK: Data
