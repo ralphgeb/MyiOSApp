@@ -76,6 +76,7 @@ struct ContentView: View {
         .background(theme.background.ignoresSafeArea())
         .foregroundStyle(theme.ink)
         .tint(theme.ink)
+        .animation(nil, value: paletteTick)     // colors change instantly, no fade
     }
 
     /// Standard empty state for a missing permission.
@@ -195,12 +196,12 @@ struct ContentView: View {
                     let c = scheme == .dark ? p.dark : p.light
                     let selected = SharedSettings.presetID == p.id
                     Button {
-                        withAnimation(.snappy) {
-                            SharedSettings.applyPreset(id: p.id, light: p.lightSet, dark: p.darkSet)
-                            syncColorState()
-                            colorRefresh += 1
-                        }
-                        scheduleWidgetReload()
+                        SharedSettings.applyPreset(id: p.id, light: p.lightSet, dark: p.darkSet)
+                        syncColorState()
+                        colorRefresh += 1
+                        // Refresh the widgets right away (no wait) so they switch as fast as iOS allows.
+                        pendingReload?.cancel()
+                        SharedSettings.reloadWidgets()
                     } label: {
                         VStack(spacing: 6) {
                             ZStack {
