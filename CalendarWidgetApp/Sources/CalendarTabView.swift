@@ -445,8 +445,10 @@ struct RootView: View {
 struct CalendarAccessNeededView: View {
     let status: EKAuthorizationStatus
     let onAllow: () -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        let theme = AppTheme(scheme: scheme)
         ContentUnavailableView {
             Label("Calendar Access Needed", systemImage: "calendar.badge.exclamationmark")
         } description: {
@@ -459,9 +461,13 @@ struct CalendarAccessNeededView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(theme.accent)
+                .foregroundStyle(theme.accentText)
             } else {
                 Button("Allow Calendar Access", action: onAllow)
                     .buttonStyle(.borderedProminent)
+                    .tint(theme.accent)
+                    .foregroundStyle(theme.accentText)
             }
         }
     }

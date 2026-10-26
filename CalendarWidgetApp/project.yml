@@ -37,7 +37,7 @@ targets:
           - com.ralphgeb.calendarwidgetapp.refresh
         ITSAppUsesNonExemptEncryption: false   # skips the export-compliance question in TestFlight
         NSCalendarsFullAccessUsageDescription: Shows your upcoming events in the widget.
-        NSLocationWhenInUseUsageDescription: Shows the weather where you are in the widget.
+        NSLocationWhenInUseUsageDescription: Minimal uses your location to show the weather icon. Everything else works without it, but no icon will be shown.
     entitlements:
       path: Sources/App.entitlements
       properties:
@@ -61,7 +61,7 @@ targets:
       properties:
         CFBundleDisplayName: Upcoming Events
         NSCalendarsFullAccessUsageDescription: Shows your upcoming events in the widget.
-        NSLocationWhenInUseUsageDescription: Shows the weather where you are in the widget.
+        NSLocationWhenInUseUsageDescription: Minimal uses your location to show the weather icon. Everything else works without it, but no icon will be shown.
         NSWidgetWantsLocation: true
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
