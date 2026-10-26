@@ -98,6 +98,7 @@ struct CalendarTabView: View {
         }
         .onAppear { colorTick += 1; load() }
         .onReceive(tick) { now = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in colorTick += 1 }
         .onReceive(NotificationCenter.default.publisher(for: .weatherUpdated)) { _ in now = Date() }
         .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in load() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { load() } }
