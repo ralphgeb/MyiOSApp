@@ -402,6 +402,9 @@ struct CalendarTogglesView: View {
     let isUnlocked: Bool
     let onLocked: () -> Void
     let onChange: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    private var theme: AppTheme { AppTheme(scheme: scheme) }
 
     private var grouped: [(title: String, calendars: [EKCalendar])] {
         Dictionary(grouping: calendars) { $0.source?.title ?? "Other" }
@@ -432,8 +435,14 @@ struct CalendarTogglesView: View {
                         }
                     }
                 }
+                .listRowBackground(theme.card)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(theme.background.ignoresSafeArea())
+        .foregroundStyle(theme.ink)
+        .tint(theme.ink)
+        .toolbarColorScheme(theme.barScheme, for: .navigationBar)
         .navigationTitle("Calendars")
         .navigationBarTitleDisplayMode(.inline)
     }
