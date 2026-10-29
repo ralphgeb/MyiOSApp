@@ -58,9 +58,11 @@ private struct WelcomePage: View {
                     .foregroundStyle(theme.ink)
                     .opacity(named ? 1 : 0)
                     .offset(y: named ? 0 : 10)
-                Text("See what's next")
+                Text("Your next days at a glance")
                     .font(.system(size: 31, weight: .thin))
                     .foregroundStyle(theme.ink)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
                     .opacity(subtitled ? 1 : 0)
             }
             .padding(.top, 24)
