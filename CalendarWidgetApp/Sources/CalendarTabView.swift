@@ -415,6 +415,7 @@ struct RootView: View {
     @EnvironmentObject private var location: LocationAccess
     @Environment(\.colorScheme) private var scheme
     @State private var themeTick = 0
+    @AppStorage("onboarded") private var onboarded = false
 
     var body: some View {
         TabView {
@@ -427,7 +428,11 @@ struct RootView: View {
         .tint({ _ = themeTick; return AppTheme(scheme: SharedSettings.appearanceMode.scheme ?? scheme).ink }())
         .preferredColorScheme({ _ = themeTick; return SharedSettings.appearanceMode.scheme }())
         .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in themeTick += 1 }
-        .task { await askForPermissions() }
+        // Welcome pages the first time; the calendar and location questions come right after them.
+        .fullScreenCover(isPresented: Binding(get: { !onboarded }, set: { onboarded = !$0 })) {
+            OnboardingView { onboarded = true }
+        }
+        .task(id: onboarded) { if onboarded { await askForPermissions() } }
     }
 
     /// First launch: calendar access first, then location (one prompt at a time).
@@ -453,7 +458,7 @@ struct CalendarAccessNeededView: View {
         ContentUnavailableView {
             Label("Calendar Access Needed", systemImage: "calendar.badge.exclamationmark")
         } description: {
-            Text("Minimal needs access to your calendar to show your events.")
+            Text("Ahead needs access to your calendar to show your events.")
         } actions: {
             if status == .denied || status == .restricted {
                 Button("Open Settings") {
