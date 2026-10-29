@@ -159,6 +159,32 @@ enum SharedSettings {
         ignoreAppearance = on
     }
 
+    /// Light / Dark / follow the iPhone.
+    enum AppearanceMode: String, CaseIterable, Identifiable {
+        case automatic, light, dark
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .automatic: return "Automatic"
+            case .light: return "Light"
+            case .dark: return "Dark"
+            }
+        }
+        /// nil = follow the system.
+        var scheme: ColorScheme? {
+            switch self {
+            case .automatic: return nil
+            case .light: return .light
+            case .dark: return .dark
+            }
+        }
+    }
+
+    static var appearanceMode: AppearanceMode {
+        get { AppearanceMode(rawValue: defaults.string(forKey: "appearanceMode") ?? "") ?? .automatic }
+        set { defaults.set(newValue.rawValue, forKey: "appearanceMode") }
+    }
+
     /// Which ready-made look is on ("custom" once any color is changed by hand, nil = original).
     static var presetID: String? {
         get { defaults.string(forKey: "colorPresetID") }

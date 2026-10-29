@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var ignoreAppearance = SharedSettings.ignoreAppearance
     @State private var hasCustomColors = SharedSettings.hasCustomColors
     @State private var colorRefresh = 0          // bumped to redraw the color pickers
+    @State private var mode = SharedSettings.appearanceMode
     @State private var paletteTick = 0           // bumped whenever a color changes, so the page redraws
     @State private var pendingReload: Task<Void, Never>?
     @EnvironmentObject private var location: LocationAccess
@@ -57,6 +58,7 @@ struct ContentView: View {
         Form {
             unlockSection.listRowBackground(theme.card)
             calendarsSection.listRowBackground(theme.card)
+            modeSection.listRowBackground(theme.card)
             customizationSection.listRowBackground(theme.card)
             optionsSection.listRowBackground(theme.card)
             weatherSection.listRowBackground(theme.card)
@@ -143,6 +145,26 @@ struct ContentView: View {
                     Color.clear.contentShape(Rectangle()).onTapGesture { showPaywall = true }
                 }
             }
+    }
+
+    /// Automatic follows the iPhone; Light or Dark force one look in the app (and in custom-colored widgets).
+    private var modeSection: some View {
+        Section {
+            Picker("Mode", selection: $mode) {
+                ForEach(SharedSettings.AppearanceMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            .onChange(of: mode) { _, new in
+                SharedSettings.appearanceMode = new
+                syncColorState()
+                SharedSettings.reloadWidgets()
+            }
+        } header: {
+            Text("Light and Dark")
+        } footer: {
+            Text("Automatic follows your iPhone's Light or Dark setting. Widgets with your own colors follow it too; the original look follows the iPhone.")
+        }
     }
 
     private var customizationSection: some View {

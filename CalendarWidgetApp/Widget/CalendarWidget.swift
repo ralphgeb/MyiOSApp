@@ -166,7 +166,7 @@ struct CalendarWidgetView: View {
 
     // MARK: Colors (custom colors, or the system defaults)
 
-    private var colorSet: SharedSettings.ColorSet { entry.colors.resolved(for: scheme) }
+    private var colorSet: SharedSettings.ColorSet { entry.colors.resolved(for: SharedSettings.appearanceMode.scheme ?? scheme) }
     private var textColor: Color { colorSet.text?.color ?? .primary }
     private var highlightColor: Color { colorSet.highlight?.color ?? .orange }
     private var backgroundColor: Color { colorSet.background?.color ?? .clear }

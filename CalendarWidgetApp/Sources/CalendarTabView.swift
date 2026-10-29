@@ -424,7 +424,8 @@ struct RootView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         // The selected tab uses your main color (not system blue), like the sister app.
-        .tint({ _ = themeTick; return AppTheme(scheme: scheme).ink }())
+        .tint({ _ = themeTick; return AppTheme(scheme: SharedSettings.appearanceMode.scheme ?? scheme).ink }())
+        .preferredColorScheme({ _ = themeTick; return SharedSettings.appearanceMode.scheme }())
         .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in themeTick += 1 }
         .task { await askForPermissions() }
     }
