@@ -418,20 +418,27 @@ struct RootView: View {
     @AppStorage("onboarded") private var onboarded = false
 
     var body: some View {
-        TabView {
-            CalendarTabView()
-                .tabItem { Label("Calendar", systemImage: "calendar") }
-            ContentView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+        // One clean background; the welcome pages or the app sit on it (no flash of the app behind them).
+        ZStack {
+            AppTheme(scheme: SharedSettings.appearanceMode.scheme ?? scheme).background.ignoresSafeArea()
+            if onboarded {
+                TabView {
+                    CalendarTabView()
+                        .tabItem { Label("Calendar", systemImage: "calendar") }
+                    ContentView()
+                        .tabItem { Label("Settings", systemImage: "gearshape") }
+                }
+                .transition(.opacity)
+            } else {
+                OnboardingView { withAnimation(.easeInOut(duration: 0.4)) { onboarded = true } }
+                    .transition(.opacity)
+            }
         }
         // The selected tab uses your main color (not system blue), like the sister app.
         .tint({ _ = themeTick; return AppTheme(scheme: SharedSettings.appearanceMode.scheme ?? scheme).ink }())
         .preferredColorScheme({ _ = themeTick; return SharedSettings.appearanceMode.scheme }())
         .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in themeTick += 1 }
-        // Welcome pages the first time; the calendar and location questions come right after them.
-        .fullScreenCover(isPresented: Binding(get: { !onboarded }, set: { onboarded = !$0 })) {
-            OnboardingView { onboarded = true }
-        }
+        // The calendar and location questions come right after the welcome pages.
         .task(id: onboarded) { if onboarded { await askForPermissions() } }
     }
 

@@ -47,22 +47,26 @@ private struct WelcomePage: View {
     private var theme: AppTheme { AppTheme(scheme: scheme) }
 
     var body: some View {
+        // The logo and name sit in the exact middle of the screen; the button is pinned to the bottom.
         VStack(spacing: 0) {
-            Spacer()
             AheadMark(shown: bars, ink: theme.ink)
-                .frame(width: 118, height: 118)
-            Text("Ahead")
-                .font(.system(size: 31, weight: .semibold))
-                .foregroundStyle(theme.ink)
-                .padding(.top, 26)
-                .opacity(named ? 1 : 0)
-                .offset(y: named ? 0 : 10)
-            Text("See what's next")
-                .font(.system(size: 14))
-                .foregroundStyle(theme.ink.opacity(0.5))
-                .padding(.top, 6)
-                .opacity(subtitled ? 1 : 0)
-            Spacer()
+                .frame(width: 100, height: 100)
+            VStack(spacing: 2) {
+                Text("AHEAD")
+                    .font(.system(size: 31, weight: .bold))
+                    .tracking(3)
+                    .foregroundStyle(theme.ink)
+                    .opacity(named ? 1 : 0)
+                    .offset(y: named ? 0 : 10)
+                Text("See what's next")
+                    .font(.system(size: 31, weight: .thin))
+                    .foregroundStyle(theme.ink)
+                    .opacity(subtitled ? 1 : 0)
+            }
+            .padding(.top, 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
             PillButton(title: "Get started", action: next)
                 .opacity(button ? 1 : 0)
                 .padding(.bottom, 28)
@@ -208,7 +212,7 @@ struct AheadMark: View {
 
     var body: some View {
         // proportions taken from the 1024 px icon (597 px wide mark)
-        let s = 118.0 / 597.0
+        let s = 100.0 / 597.0
         let bars: [(y: Double, w: Double, h: Double)] = [(0, 597, 96), (152, 516, 54), (260, 516, 54), (368, 330, 54)]
         ZStack(alignment: .topLeading) {
             ForEach(bars.indices, id: \.self) { i in
@@ -220,8 +224,8 @@ struct AheadMark: View {
                     .offset(y: bars[i].y * s)
             }
         }
-        .frame(width: 118, height: 422 * s, alignment: .topLeading)
-        .frame(width: 118, height: 118)
+        .frame(width: 100, height: 422 * s, alignment: .topLeading)
+        .frame(width: 100, height: 100)
         .accessibilityHidden(true)
     }
 }
