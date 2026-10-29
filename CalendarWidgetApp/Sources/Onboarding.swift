@@ -49,24 +49,23 @@ private struct WelcomePage: View {
     var body: some View {
         // The logo and name sit in the exact middle of the screen; the button is pinned to the bottom.
         VStack(spacing: 0) {
-            AheadMark(shown: bars, ink: theme.ink)
-                .frame(width: 100, height: 100)
+            AheadMark(shown: bars, ink: theme.ink, size: 85)
             VStack(spacing: 2) {
-                Text("AHEAD")
-                    .font(.system(size: 31, weight: .bold))
-                    .tracking(3)
+                Text("Ahead")
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(theme.ink)
                     .opacity(named ? 1 : 0)
                     .offset(y: named ? 0 : 10)
                 Text("Your next days at a glance")
-                    .font(.system(size: 31, weight: .thin))
+                    .font(.system(size: 22, weight: .thin))
                     .foregroundStyle(theme.ink)
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.8)
                     .opacity(subtitled ? 1 : 0)
             }
-            .padding(.top, 24)
+            .padding(.top, 20)
         }
+        .offset(y: -100)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
             PillButton(title: "Get started", action: next)
@@ -211,10 +210,11 @@ struct PillButton: View {
 struct AheadMark: View {
     let shown: Int
     let ink: Color
+    var size: CGFloat = 100
 
     var body: some View {
         // proportions taken from the 1024 px icon (597 px wide mark)
-        let s = 100.0 / 597.0
+        let s = Double(size) / 597.0
         let bars: [(y: Double, w: Double, h: Double)] = [(0, 597, 96), (152, 516, 54), (260, 516, 54), (368, 330, 54)]
         ZStack(alignment: .topLeading) {
             ForEach(bars.indices, id: \.self) { i in
@@ -226,8 +226,8 @@ struct AheadMark: View {
                     .offset(y: bars[i].y * s)
             }
         }
-        .frame(width: 100, height: 422 * s, alignment: .topLeading)
-        .frame(width: 100, height: 100)
+        .frame(width: size, height: 422 * s, alignment: .topLeading)
+        .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 }
