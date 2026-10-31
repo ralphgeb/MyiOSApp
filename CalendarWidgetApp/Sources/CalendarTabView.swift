@@ -106,11 +106,9 @@ struct CalendarTabView: View {
 
     private var unavailable: some View {
         CalendarAccessNeededView(status: status) {
-            Task {
-                _ = try? await store.requestFullAccessToEvents()
-                load()
-                SharedSettings.reloadWidgets()
-            }
+            _ = try? await store.requestFullAccessToEvents()
+            load()
+            SharedSettings.reloadWidgets()
         }
     }
 
@@ -457,8 +455,17 @@ struct RootView: View {
 /// The "Calendar Access Needed" screen, shared by the Calendar and Settings tabs so they look identical.
 struct CalendarAccessNeededView: View {
     let status: EKAuthorizationStatus
-    let onAllow: () -> Void
+    /// Asks iOS for access and refreshes the screen; returns when the question is answered.
+    let onAllow: () async -> Void
     @Environment(\.colorScheme) private var scheme
+
+    /// Opens Ahead's page in the iPhone's Settings app.
+    private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url) { opened in
+            if !opened, let fallback = URL(string: "app-settings:") { UIApplication.shared.open(fallback) }
+        }
+    }
 
     var body: some View {
         let theme = AppTheme(scheme: scheme)
@@ -467,17 +474,24 @@ struct CalendarAccessNeededView: View {
         } description: {
             Text("Ahead needs access to your calendar to show your events.")
         } actions: {
-            if status == .denied || status == .restricted {
-                Button("Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
+            if status == .notDetermined {
+                Button("Allow Calendar Access") {
+                    Task {
+                        let started = Date()
+                        await onAllow()
+                        // iOS only asks once. If it answered instantly without asking, go straight to Settings.
+                        if EKEventStore.authorizationStatus(for: .event) != .fullAccess,
+                           Date().timeIntervalSince(started) < 0.6 {
+                            openSettings()
+                        }
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(theme.accent)
                 .foregroundStyle(theme.accentText)
             } else {
-                Button("Allow Calendar Access", action: onAllow)
+                // Denied, restricted or write-only: only the Settings app can change it.
+                Button("Open Settings", action: openSettings)
                     .buttonStyle(.borderedProminent)
                     .tint(theme.accent)
                     .foregroundStyle(theme.accentText)

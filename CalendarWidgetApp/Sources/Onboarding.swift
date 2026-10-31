@@ -63,9 +63,9 @@ private struct WelcomePage: View {
                     .minimumScaleFactor(0.8)
                     .opacity(subtitled ? 1 : 0)
             }
-            .padding(.top, 20)
+            .padding(.top, 80)
         }
-        .offset(y: -100)
+        .offset(y: -70)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
             PillButton(title: "Get started", action: next)
@@ -79,10 +79,10 @@ private struct WelcomePage: View {
                 try? await Task.sleep(for: .milliseconds(190))
             }
             try? await Task.sleep(for: .milliseconds(350))
-            withAnimation(.easeOut(duration: 0.9)) { named = true }
-            try? await Task.sleep(for: .milliseconds(1000))
-            withAnimation(.easeOut(duration: 0.9)) { subtitled = true }
-            try? await Task.sleep(for: .milliseconds(700))
+            withAnimation(.easeOut(duration: 1.6)) { named = true }
+            try? await Task.sleep(for: .milliseconds(1900))
+            withAnimation(.easeOut(duration: 1.6)) { subtitled = true }
+            try? await Task.sleep(for: .milliseconds(1500))
             withAnimation(.easeOut(duration: 0.5)) { button = true }
         }
     }

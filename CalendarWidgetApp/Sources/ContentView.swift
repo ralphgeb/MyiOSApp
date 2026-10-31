@@ -9,6 +9,7 @@ struct ContentView: View {
     private let store = EKEventStore()
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var status = EKEventStore.authorizationStatus(for: .event)
     @State private var calendars: [EKCalendar] = []
     @State private var hidden = SharedSettings.hiddenCalendarIDs
@@ -45,6 +46,7 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)   // compact title instead of the large one
             .toolbarColorScheme(theme.barScheme, for: .navigationBar)
             .onAppear(perform: reload)
+            .onChange(of: scenePhase) { _, phase in if phase == .active { reload() } }
             .onReceive(NotificationCenter.default.publisher(for: .weatherUpdated)) { _ in
                 weatherFetched = SharedSettings.forecast?.fetched
             }
@@ -58,7 +60,6 @@ struct ContentView: View {
         Form {
             unlockSection.listRowBackground(theme.card)
             calendarsSection.listRowBackground(theme.card)
-            modeSection.listRowBackground(theme.card)
             customizationSection.listRowBackground(theme.card)
             optionsSection.listRowBackground(theme.card)
             weatherSection.listRowBackground(theme.card)
@@ -84,11 +85,9 @@ struct ContentView: View {
     /// Standard empty state for a missing permission.
     private var accessNeeded: some View {
         CalendarAccessNeededView(status: status) {
-            Task {
-                _ = try? await store.requestFullAccessToEvents()
-                reload()
-                scheduleWidgetReload()
-            }
+            _ = try? await store.requestFullAccessToEvents()
+            reload()
+            scheduleWidgetReload()
         }
     }
 
@@ -148,27 +147,22 @@ struct ContentView: View {
     }
 
     /// Automatic follows the iPhone; Light or Dark force one look in the app (and in custom-colored widgets).
-    private var modeSection: some View {
-        Section {
-            Picker("Mode", selection: $mode) {
-                ForEach(SharedSettings.AppearanceMode.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-            .onChange(of: mode) { _, new in
-                SharedSettings.appearanceMode = new
-                syncColorState()
-                SharedSettings.reloadWidgets()
-            }
-        } header: {
-            Text("Light and Dark")
-        } footer: {
-            Text("Automatic follows your iPhone's Light or Dark setting. Widgets with your own colors follow it too; the original look follows the iPhone.")
+    private var modePicker: some View {
+        Picker("Mode", selection: $mode) {
+            ForEach(SharedSettings.AppearanceMode.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+        .onChange(of: mode) { _, new in
+            SharedSettings.appearanceMode = new
+            syncColorState()
+            SharedSettings.reloadWidgets()
         }
     }
 
     private var customizationSection: some View {
         Section {
+            modePicker
             locked(presetsRow)
             locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: false))
             locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
@@ -326,8 +320,6 @@ struct ContentView: View {
             AppleWeatherAttribution()
         } header: {
             Text("Weather")
-        } footer: {
-            Text("Shows the weather where you are, as an icon at the top of the widget. Choose \"Allow While Using App\" (not \"Allow Once\"). It refreshes a few times a day.")
         }
     }
 
