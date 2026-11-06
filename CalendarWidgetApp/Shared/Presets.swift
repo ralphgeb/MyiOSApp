@@ -1,0 +1,77 @@
+import SwiftUI
+
+extension RGBA {
+    init(hex: UInt32) {
+        self.init(r: Double((hex >> 16) & 0xFF) / 255, g: Double((hex >> 8) & 0xFF) / 255,
+                  b: Double(hex & 0xFF) / 255, a: 1)
+    }
+
+    var luminance: Double { 0.299 * r + 0.587 * g + 0.114 * b }
+
+    /// This color moved toward `other` by `t` (0...1).
+    func mixed(with other: RGBA, _ t: Double) -> RGBA {
+        RGBA(r: r + (other.r - r) * t, g: g + (other.g - g) * t, b: b + (other.b - b) * t, a: 1)
+    }
+}
+
+/// A ready-made look, shared with the sister app: a main (text) color, a background and a card color
+/// for Light and Dark mode, plus one accent.
+struct LookPreset: Identifiable {
+    let id: String
+    let name: String
+    let light: (ink: RGBA, background: RGBA, card: RGBA)
+    let dark: (ink: RGBA, background: RGBA, card: RGBA)
+    let accent: RGBA
+
+    private func makeSet(_ p: (ink: RGBA, background: RGBA, card: RGBA)) -> SharedSettings.ColorSet {
+        var s = SharedSettings.ColorSet()
+        s.background = p.background
+        s.text = p.ink
+        s.card = p.card
+        s.highlight = accent
+        s.highlightText = accent.luminance > 0.6 ? RGBA(hex: 0x000000) : RGBA(hex: 0xFFFFFF)
+        return s
+    }
+
+    var lightSet: SharedSettings.ColorSet { makeSet(light) }
+    var darkSet: SharedSettings.ColorSet { makeSet(dark) }
+
+    static let all: [LookPreset] = [
+        LookPreset(id: "graphite", name: "Graphite",
+                   light: (RGBA(hex: 0x121214), RGBA(hex: 0xF9F9F7), RGBA(hex: 0xFFFFFF)),
+                   dark: (RGBA(hex: 0xF2F2ED), RGBA(hex: 0x090909), RGBA(hex: 0x171717)),
+                   accent: RGBA(hex: 0xFF6129)),
+        LookPreset(id: "ocean", name: "Ocean",
+                   light: (RGBA(hex: 0x0E2A47), RGBA(hex: 0xF4F7FA), RGBA(hex: 0xFFFFFF)),
+                   dark: (RGBA(hex: 0xE4EEF7), RGBA(hex: 0x07111C), RGBA(hex: 0x0F1C2B)),
+                   accent: RGBA(hex: 0x1FC8B4)),
+        LookPreset(id: "forest", name: "Forest",
+                   light: (RGBA(hex: 0x1C3324), RGBA(hex: 0xF5F7F3), RGBA(hex: 0xFFFFFF)),
+                   dark: (RGBA(hex: 0xE5EFE6), RGBA(hex: 0x08100B), RGBA(hex: 0x111C15)),
+                   accent: RGBA(hex: 0xE8B04A)),
+        LookPreset(id: "mono", name: "Mono",
+                   light: (RGBA(hex: 0x000000), RGBA(hex: 0xFFFFFF), RGBA(hex: 0xF3F3F3)),
+                   dark: (RGBA(hex: 0xFFFFFF), RGBA(hex: 0x000000), RGBA(hex: 0x141414)),
+                   accent: RGBA(hex: 0xE5484D)),
+        LookPreset(id: "dusk", name: "Dusk",
+                   light: (RGBA(hex: 0x2B2540), RGBA(hex: 0xF7F6FA), RGBA(hex: 0xFFFFFF)),
+                   dark: (RGBA(hex: 0xECE9F6), RGBA(hex: 0x0D0B14), RGBA(hex: 0x18151F)),
+                   accent: RGBA(hex: 0xFF8A65)),
+        LookPreset(id: "sand", name: "Sand",
+                   light: (RGBA(hex: 0x3A2E27), RGBA(hex: 0xF7F3EE), RGBA(hex: 0xFFFDFA)),
+                   dark: (RGBA(hex: 0xF3ECE4), RGBA(hex: 0x120E0B), RGBA(hex: 0x1D1814)),
+                   accent: RGBA(hex: 0x3D8BFD)),
+        // Two light themes (they stay light in Dark mode too).
+        LookPreset(id: "sky", name: "Sky",
+                   light: (RGBA(hex: 0x12304F), RGBA(hex: 0xEAF3FF), RGBA(hex: 0xFFFFFF)),
+                   dark: (RGBA(hex: 0x12304F), RGBA(hex: 0xEAF3FF), RGBA(hex: 0xFFFFFF)),
+                   accent: RGBA(hex: 0x3B82F6)),
+        LookPreset(id: "blush", name: "Blush",
+                   light: (RGBA(hex: 0x4A1F2D), RGBA(hex: 0xFFEEF2), RGBA(hex: 0xFFFFFF)),
+                   dark: (RGBA(hex: 0x4A1F2D), RGBA(hex: 0xFFEEF2), RGBA(hex: 0xFFFFFF)),
+                   accent: RGBA(hex: 0xEE4D88)),
+    ]
+
+    static func find(_ id: String?) -> LookPreset? { all.first { $0.id == id } }
+}
+

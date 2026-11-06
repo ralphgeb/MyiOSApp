@@ -185,6 +185,21 @@ enum SharedSettings {
         set { defaults.set(newValue.rawValue, forKey: "appearanceMode") }
     }
 
+    /// The theme chosen on the first screens: free for everyone. Other themes and custom colors need Ahead Plus.
+    static var freeThemeID: String? {
+        get { defaults.string(forKey: "freeThemeID") }
+        set { defaults.set(newValue, forKey: "freeThemeID") }
+    }
+
+    /// The colors to draw with right now: the owner's own colors with Ahead Plus, otherwise the free theme.
+    static var effectiveColorSettings: ColorSettings {
+        if isPro { return colorSettings }
+        if let p = LookPreset.find(freeThemeID) {
+            return ColorSettings(ignoreAppearance: false, both: .init(), light: p.lightSet, dark: p.darkSet)
+        }
+        return ColorSettings(ignoreAppearance: false, both: .init(), light: .init(), dark: .init())
+    }
+
     /// Which ready-made look is on ("custom" once any color is changed by hand, nil = original).
     static var presetID: String? {
         get { defaults.string(forKey: "colorPresetID") }

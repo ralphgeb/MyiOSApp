@@ -31,7 +31,7 @@ struct CalendarTabView: View {
     // MARK: Data
 
     private var colors: SharedSettings.ColorSet {
-        SharedSettings.isPro ? SharedSettings.colorSettings.resolved(for: scheme) : SharedSettings.ColorSet()
+        SharedSettings.effectiveColorSettings.resolved(for: scheme)
     }
     /// Dark gray like the widget in Dark mode (not black); the system background in Light mode.
     private var pageBackground: Color {
@@ -40,14 +40,12 @@ struct CalendarTabView: View {
     private var textColor: Color { colors.text?.color ?? .primary }
 
     private var highlight: Color {
-        guard SharedSettings.isPro else { return .orange }
-        return SharedSettings.colorSettings.resolved(for: scheme).highlight?.color ?? .orange
+        return SharedSettings.effectiveColorSettings.resolved(for: scheme).highlight?.color ?? .orange
     }
 
     /// Number inside the highlighted date's circle.
     private var highlightedDateText: Color {
-        guard SharedSettings.isPro else { return .black }
-        return SharedSettings.colorSettings.resolved(for: scheme).highlightText?.color ?? .black
+        return SharedSettings.effectiveColorSettings.resolved(for: scheme).highlightText?.color ?? .black
     }
 
     /// Finished events are hidden, so the first row is always what's on now or next.

@@ -15,7 +15,6 @@ struct ContentView: View {
     @State private var hidden = SharedSettings.hiddenCalendarIDs
     @State private var daysAhead = SharedSettings.daysAhead
     @State private var showAllDay = SharedSettings.showAllDay
-    @State private var weatherFetched: Date? = SharedSettings.forecast?.fetched
     @State private var ignoreAppearance = SharedSettings.ignoreAppearance
     @State private var hasCustomColors = SharedSettings.hasCustomColors
     @State private var colorRefresh = 0          // bumped to redraw the color pickers
@@ -47,9 +46,6 @@ struct ContentView: View {
             .toolbarColorScheme(theme.barScheme, for: .navigationBar)
             .onAppear(perform: reload)
             .onChange(of: scenePhase) { _, phase in if phase == .active { reload() } }
-            .onReceive(NotificationCenter.default.publisher(for: .weatherUpdated)) { _ in
-                weatherFetched = SharedSettings.forecast?.fetched
-            }
             .sheet(isPresented: $showPaywall) { PaywallView(store: purchase) }
         }
     }
@@ -65,14 +61,7 @@ struct ContentView: View {
             weatherSection.listRowBackground(theme.card)
             Section {
             } footer: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("To add the widget, touch and hold your Home Screen, tap the add button, then choose Upcoming Events.")
-                    if let d = weatherFetched {
-                        Text("Weather last requested from Apple Weather on \(d.formatted(.dateTime.day().month(.abbreviated).hour().minute())).")
-                    } else {
-                        Text("Weather hasn't been requested from Apple Weather yet.")
-                    }
-                }
+                Text("To add the widget, touch and hold your Home Screen, tap the add button, then choose Ahead.")
             }
         }
         .scrollContentBackground(.hidden)
@@ -97,19 +86,19 @@ struct ContentView: View {
     private var unlockSection: some View {
         Section {
             if purchase.isPro {
-                Label("All widgets and settings unlocked", systemImage: "checkmark.seal.fill")
+                Label("Ahead Plus is unlocked", systemImage: "checkmark.seal.fill")
                     .foregroundStyle(.green)
             } else {
                 Button { showPaywall = true } label: {
                     HStack {
-                        Label("Unlock All Widgets", systemImage: "lock.open")
+                        Label("Get Ahead Plus", systemImage: "lock.open")
                         Spacer()
                         Text(purchase.product?.displayPrice ?? "£1.99").foregroundStyle(.secondary)
                     }
                 }
             }
         } footer: {
-            if !purchase.isPro { Text("One payment unlocks the medium, extra large and Lock Screen widgets and all settings.") }
+            if !purchase.isPro { Text("One payment unlocks the medium, extra large and Lock Screen widgets, all themes and all settings.") }
         }
     }
 
@@ -163,7 +152,7 @@ struct ContentView: View {
     private var customizationSection: some View {
         Section {
             modePicker
-            locked(presetsRow)
+            presetsRow
             locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: false))
             locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
             locked(ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false))
@@ -211,8 +200,11 @@ struct ContentView: View {
             HStack(spacing: 14) {
                 ForEach(LookPreset.all) { p in
                     let c = scheme == .dark ? p.dark : p.light
-                    let selected = SharedSettings.presetID == p.id
+                    let selected = (purchase.isPro ? SharedSettings.presetID : SharedSettings.freeThemeID) == p.id
+                    let isLocked = !purchase.isPro && p.id != SharedSettings.freeThemeID
                     Button {
+                        if isLocked { showPaywall = true; return }
+                        if !purchase.isPro { return }
                         SharedSettings.applyPreset(id: p.id, light: p.lightSet, dark: p.darkSet)
                         syncColorState()
                         colorRefresh += 1
@@ -227,6 +219,12 @@ struct ContentView: View {
                                     .stroke(c.ink.color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
                                 Circle().fill(p.accent.color).frame(width: 9, height: 9)
+                                if isLocked {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(c.ink.color.opacity(0.7))
+                                        .offset(x: 17, y: 17)
+                                }
                             }
                             .frame(width: 52, height: 52)
                             .overlay(Circle().stroke(selected ? theme.accent : theme.ink.opacity(0.12),
@@ -395,7 +393,6 @@ struct ContentView: View {
         if status == .fullAccess {
             calendars = store.calendars(for: .event)
         }
-        weatherFetched = SharedSettings.forecast?.fetched
         syncColorState()
     }
 

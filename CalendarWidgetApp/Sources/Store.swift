@@ -91,12 +91,12 @@ struct PaywallView: View {
                     .foregroundStyle(.tint)
                     .padding(.top, 24)
 
-                Text("Unlock Customization")
+                Text("Ahead Plus")
                     .font(.title2.bold())
 
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Choose which calendars to show", systemImage: "calendar")
-                    Label("Change background, text and highlight colors", systemImage: "paintpalette")
+                    Label("All themes, plus your own colors", systemImage: "paintpalette")
                     Label("Use the medium, extra large and Lock Screen widgets", systemImage: "lock.rectangle")
                     Label("One payment, yours forever", systemImage: "checkmark.seal")
                 }
@@ -105,7 +105,7 @@ struct PaywallView: View {
                 Spacer()
 
                 if store.isPro {
-                    Label("All widgets and settings unlocked", systemImage: "checkmark.circle.fill")
+                    Label("Ahead Plus is unlocked", systemImage: "checkmark.circle.fill")
                         .font(.headline)
                         .foregroundStyle(.green)
                 } else {
@@ -114,7 +114,7 @@ struct PaywallView: View {
                     } label: {
                         Group {
                             if store.isBusy { ProgressView() }
-                            else { Text("Unlock for \(store.product?.displayPrice ?? "£1.99")") }
+                            else { Text("Get Ahead Plus for \(store.product?.displayPrice ?? "£1.99")") }
                         }
                         .frame(maxWidth: .infinity)
                     }

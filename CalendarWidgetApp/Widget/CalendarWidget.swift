@@ -117,9 +117,7 @@ struct Provider: TimelineProvider {
                       page: Pager.page(for: family),
                       direction: Pager.direction,
                       weatherIcon: weather?.iconName,
-                      colors: SharedSettings.isPro
-                        ? SharedSettings.colorSettings
-                        : SharedSettings.ColorSettings(ignoreAppearance: false, both: .init(), light: .init(), dark: .init()),
+                      colors: SharedSettings.effectiveColorSettings,
                       isPro: preview || SharedSettings.isPro)
     }
 

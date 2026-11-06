@@ -7,17 +7,18 @@ struct OnboardingView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var page = 0
     @State private var forward = true
+    @State private var tick = 0       // bumps when the chosen theme changes, so every page redraws
 
-    private var theme: AppTheme { AppTheme(scheme: scheme) }
+    private var theme: AppTheme { _ = tick; return AppTheme(scheme: scheme) }
 
     var body: some View {
         ZStack {
             theme.background.ignoresSafeArea()
             Group {
-                if page == 0 {
-                    WelcomePage { go(1) }
-                } else {
-                    ExplainPage(back: { go(0) }, start: finish)
+                switch page {
+                case 0: WelcomePage(tick: tick) { go(1) }
+                case 1: ThemePage(tick: tick, back: { go(0) }, next: { go(2) })
+                default: ExplainPage(tick: tick, back: { go(1) }, start: finish)
                 }
             }
             .id(page)
@@ -26,6 +27,7 @@ struct OnboardingView: View {
         }
         .tint(theme.ink)
         .sensoryFeedback(.selection, trigger: page)
+        .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in tick += 1 }
     }
 
     private func go(_ p: Int) {
@@ -37,6 +39,7 @@ struct OnboardingView: View {
 // MARK: Page 1: welcome
 
 private struct WelcomePage: View {
+    let tick: Int
     let next: () -> Void
     @Environment(\.colorScheme) private var scheme
     @State private var bars = 0
@@ -44,7 +47,7 @@ private struct WelcomePage: View {
     @State private var subtitled = false
     @State private var button = false
 
-    private var theme: AppTheme { AppTheme(scheme: scheme) }
+    private var theme: AppTheme { _ = tick; return AppTheme(scheme: scheme) }
 
     var body: some View {
         // The logo and name sit in the exact middle of the screen; the button is pinned to the bottom.
@@ -68,7 +71,7 @@ private struct WelcomePage: View {
         .offset(y: -70)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
-            PillButton(title: "Get started", action: next)
+            PillButton(title: "Get started", tick: tick, action: next)
                 .opacity(button ? 1 : 0)
                 .padding(.bottom, 28)
         }
@@ -80,7 +83,7 @@ private struct WelcomePage: View {
             }
             try? await Task.sleep(for: .milliseconds(350))
             withAnimation(.easeOut(duration: 1.6)) { named = true }
-            try? await Task.sleep(for: .milliseconds(1900))
+            try? await Task.sleep(for: .milliseconds(1400))
             withAnimation(.easeOut(duration: 1.6)) { subtitled = true }
             try? await Task.sleep(for: .milliseconds(1500))
             withAnimation(.easeOut(duration: 0.5)) { button = true }
@@ -88,15 +91,117 @@ private struct WelcomePage: View {
     }
 }
 
+// MARK: Page 2: choose a theme
+
+/// Pick the look you like. It is yours for free; the other themes come with Ahead Plus.
+private struct ThemePage: View {
+    let tick: Int
+    let back: () -> Void
+    let next: () -> Void
+    @Environment(\.colorScheme) private var scheme
+    @State private var chosen = SharedSettings.freeThemeID ?? "graphite"
+
+    private var theme: AppTheme { _ = tick; return AppTheme(scheme: scheme) }
+    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Choose your theme")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(theme.ink)
+                .padding(.top, 70)
+            Text("Yours to keep for free. The other themes come with Ahead Plus.")
+                .font(.system(size: 14))
+                .foregroundStyle(theme.ink.opacity(0.5))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+                .padding(.bottom, 22)
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(LookPreset.all) { p in card(p) }
+                }
+                .padding(.bottom, 8)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+
+            HStack {
+                Button(action: back) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(theme.card, in: Circle())
+                        .foregroundStyle(theme.ink)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+                Spacer()
+                PillButton(title: "Next", tick: tick, action: next)
+            }
+            .padding(.vertical, 12)
+        }
+        .padding(.horizontal, 24)
+        .onAppear { select(chosen) }     // the default theme is saved even if you just tap Next
+    }
+
+    private func select(_ id: String) {
+        guard let p = LookPreset.find(id) else { return }
+        chosen = id
+        SharedSettings.applyPreset(id: id, light: p.lightSet, dark: p.darkSet)
+        SharedSettings.freeThemeID = id
+        NotificationCenter.default.post(name: .colorsChanged, object: nil)
+        SharedSettings.reloadWidgets()
+    }
+
+    private func card(_ p: LookPreset) -> some View {
+        let c = scheme == .dark ? p.dark : p.light
+        let selected = chosen == p.id
+        return Button { select(p.id) } label: {
+            VStack(spacing: 8) {
+                // a tiny sample of the look: the icon's bars and the accent dot
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(c.background.color)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Capsule().fill(c.ink.color).frame(width: 44, height: 8)
+                        Capsule().fill(c.ink.color.opacity(0.4)).frame(width: 36, height: 5)
+                        Capsule().fill(c.ink.color.opacity(0.4)).frame(width: 36, height: 5)
+                        Capsule().fill(c.ink.color.opacity(0.4)).frame(width: 22, height: 5)
+                    }
+                    .padding(14)
+                    Circle().fill(p.accent.color).frame(width: 14, height: 14)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .padding(12)
+                }
+                .frame(height: 84)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(theme.ink.opacity(0.12), lineWidth: 1))
+                HStack(spacing: 6) {
+                    Text(p.name).font(.system(size: 14, weight: .medium))
+                    if selected { Image(systemName: "checkmark.circle.fill").font(.system(size: 14)) }
+                }
+                .foregroundStyle(theme.ink)
+            }
+            .padding(10)
+            .background(theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(selected ? theme.accent : .clear, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
 // MARK: Page 2: what the app does
 
 private struct ExplainPage: View {
+    let tick: Int
     let back: () -> Void
     let start: () -> Void
     @Environment(\.colorScheme) private var scheme
     @State private var shown = 0
 
-    private var theme: AppTheme { AppTheme(scheme: scheme) }
+    private var theme: AppTheme { _ = tick; return AppTheme(scheme: scheme) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -136,7 +241,7 @@ private struct ExplainPage: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
                 Spacer()
-                PillButton(title: "Start", action: start)
+                PillButton(title: "Start", tick: tick, action: start)
             }
             .padding(.bottom, 12)
         }
@@ -185,11 +290,13 @@ private struct ExplainPage: View {
 /// A small, quiet capsule with an arrow: the main button on each page.
 struct PillButton: View {
     let title: String
+    var tick: Int = 0
     let action: () -> Void
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let theme = AppTheme(scheme: scheme)
+        let _ = tick
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(title).font(.system(size: 15, weight: .semibold))
