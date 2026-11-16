@@ -247,3 +247,38 @@ jobs:
             --target "$GITHUB_SHA" --prerelease \
             --title "Ahead for the iOS Simulator (build ${{ github.run_number }})" \
             --notes "A simulator build of Ahead from commit ${GITHUB_SHA::7}, for Appetize.io or Xcode's simulator. Upload Ahead-simulator.zip to Appetize as an iOS app."
+
+      - name: Upload to Appetize
+        env:
+          APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+          APPETIZE_APP_KEY: ${{ vars.APPETIZE_APP_KEY }}
+        run: |
+          if [ -z "$APPETIZE_API_TOKEN" ]; then
+            echo "::warning::No APPETIZE_API_TOKEN secret: upload Ahead-simulator.zip from the release by hand."
+            exit 0
+          fi
+          upload() {
+            curl -sS -X POST "$1" -H "X-API-KEY: $APPETIZE_API_TOKEN" \
+              -F "file=@Ahead-simulator.zip" -F "platform=ios" -o appetize.json -w "%{http_code}"
+          }
+          # Updates the same Appetize app once APPETIZE_APP_KEY holds its public key; otherwise makes a new one.
+          key="$APPETIZE_APP_KEY"
+          if ! [[ "$key" =~ ^[a-z0-9_]{6,}$ ]]; then key=""; fi
+          code=000
+          if [ -n "$key" ]; then
+            code=$(upload "https://api.appetize.io/v1/apps/$key")
+            echo "Updating app $key: HTTP $code"
+          fi
+          if [ "${code:0:1}" != "2" ]; then
+            code=$(upload "https://api.appetize.io/v1/apps")
+            echo "Creating a new app: HTTP $code"
+          fi
+          [ "${code:0:1}" = "2" ] || { echo "::error::Appetize upload failed (HTTP $code): $(head -c 300 appetize.json)"; exit 1; }
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("appetize.json"))
+          url = d.get("publicURL") or d.get("appURL")
+          print("Appetize link:", url)
+          print("Public key (save as the APPETIZE_APP_KEY variable to keep one link):", d.get("publicKey"))
+          print(f"::notice::Appetize: {url}")
+          PY
