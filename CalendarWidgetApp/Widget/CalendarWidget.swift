@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import WidgetKit
 import EventKit
 import AppIntents
@@ -171,12 +170,6 @@ struct CalendarWidgetView: View {
 
     // MARK: Paging
 
-    /// Number of side-by-side columns: the wide extra large widget on iPad uses two.
-    /// On iPhone (iOS 27) the extra large widget is tall, so it stays one column.
-    private var columns: Int {
-        family == .systemExtraLarge && UIDevice.current.userInterfaceIdiom == .pad ? 2 : 1
-    }
-
     /// Approximate on-screen heights (points) used to decide how many rows fit.
     private enum Cost {
         static let event: CGFloat = 35          // two lines + spacing
@@ -227,9 +220,9 @@ struct CalendarWidgetView: View {
         return result
     }
 
-    /// Splits the rows into column-sized chunks. A chunk never ends on a lonely date header
+    /// Splits the rows into page-sized chunks. A chunk never ends on a lonely date header
     /// (that day moves to the next chunk), and a chunk that starts part-way through a day
-    /// gets that day's header re-added on top. One chunk per page, or two on the XL widget.
+    /// gets that day's header re-added on top. One chunk per page.
     private func chunkEndsWithPreview(_ chunk: [Row]) -> Bool {
         if case .peek? = chunk.last { return true }
         return false
@@ -295,11 +288,11 @@ struct CalendarWidgetView: View {
 
     var body: some View {
         if !entry.isPro && family != .systemSmall && family != .systemLarge && family != .accessoryRectangular {
-            // Only the small (2x2) and large (4x4) widgets are free; every other size is part of the unlock.
+            // Only the small (2x2) and large (4x4) widgets are free; every other size is part of Ahead Plus.
             VStack(spacing: 6) {
                 Image(systemName: "lock.fill").font(.title2)
-                Text("Unlock in the app").font(.system(size: 15, weight: .semibold))
-                Text("Settings → Unlock All Widgets")
+                Text("Part of Ahead Plus").font(.system(size: 15, weight: .semibold))
+                Text("Open Ahead, then Settings → Get Ahead Plus")
                     .font(.system(size: 12))
                     .opacity(0.7)
                     .multilineTextAlignment(.center)
@@ -386,9 +379,9 @@ struct CalendarWidgetView: View {
 
         return VStack(alignment: .leading, spacing: 1) {
             if !entry.isPro {
-                Label("Unlock in the app", systemImage: "lock.fill")
+                Label("Part of Ahead Plus", systemImage: "lock.fill")
                     .font(.system(size: 13, weight: .semibold))
-                Text("Lock Screen widget is part of the unlock")
+                Text("Get it in Ahead's Settings")
                     .font(.system(size: 11))
                     .opacity(0.7)
                     .lineLimit(2)
@@ -431,11 +424,9 @@ struct CalendarWidgetView: View {
     @ViewBuilder
     private func content(height: CGFloat) -> some View {
         let allChunks = chunks(fitting: height)
-        let pageCount = max(1, (allChunks.count + columns - 1) / columns)
+        let pageCount = max(1, allChunks.count)
         let pageIndex = min(entry.page, pageCount - 1)
-        let lower = min(pageIndex * columns, allChunks.count)
-        let upper = min(lower + columns, allChunks.count)
-        let shown = Array(allChunks[lower..<upper])
+        let shown = allChunks.isEmpty ? [] : [allChunks[pageIndex]]
         let canPageUp = pageIndex > 0
         let canPageDown = pageIndex < pageCount - 1
 
@@ -587,7 +578,7 @@ struct CalendarListWidget: Widget {
     let kind = SharedSettings.widgetKind
 
     static var families: [WidgetFamily] {
-        var f: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge, .accessoryRectangular]
+        var f: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular]
         #if compiler(>=6.4)
         if #available(iOS 27, *) { f.append(.systemExtraLargePortrait) }
         #endif
@@ -600,7 +591,7 @@ struct CalendarListWidget: Widget {
         }
         .configurationDisplayName("Upcoming Events")
         .description("Your upcoming events. Current event shows in orange.")
-        // Extra large: iPad. On iPhone, iOS 27 adds a full-page 4x6 size (needs the iOS 27 SDK).
+        // iPhone only. iOS 27 adds a full-page size (needs the iOS 27 SDK).
         .supportedFamilies(Self.families)
     }
 }
@@ -619,9 +610,9 @@ struct NextEventLockView: View {
         let next = entry.events.first { $0.end > now }
         VStack(alignment: .leading, spacing: 0) {
             if !entry.isPro {
-                Label("Unlock in the app", systemImage: "lock.fill")
+                Label("Part of Ahead Plus", systemImage: "lock.fill")
                     .font(.system(size: 13, weight: .semibold))
-                Text("Lock Screen widget is part of the unlock")
+                Text("Get it in Ahead's Settings")
                     .font(.system(size: 11))
                     .opacity(0.7)
                     .lineLimit(2)

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The first time Ahead opens: the logo draws itself, then the name, then the line under it.
-/// A second page explains what the app does and what it needs.
+/// Then a theme to pick, and a page on what the app does and what it needs.
 struct OnboardingView: View {
     let finish: () -> Void
     @Environment(\.colorScheme) private var scheme
@@ -21,6 +21,8 @@ struct OnboardingView: View {
                 default: ExplainPage(tick: tick, back: { go(1) }, start: finish)
                 }
             }
+            // On the iPhone Duo's big screen the pages keep a phone's width, in the middle.
+            .frame(maxWidth: 560)
             .id(page)
             .transition(.asymmetric(insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
                                     removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
@@ -192,7 +194,7 @@ private struct ThemePage: View {
     }
 }
 
-// MARK: Page 2: what the app does
+// MARK: Page 3: what the app does
 
 private struct ExplainPage: View {
     let tick: Int

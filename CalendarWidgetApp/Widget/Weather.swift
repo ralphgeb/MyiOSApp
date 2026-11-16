@@ -1,8 +1,7 @@
 import Foundation
 import CoreLocation
 
-/// Current weather for where the user is, using the free Open-Meteo service
-/// (no account or key needed). Results are cached in the App Group.
+/// Keeps the saved WeatherKit forecast fresh from inside the widget. Results are cached in the App Group.
 enum WeatherProvider {
     /// Makes sure the saved 24-hour forecast is good enough. It only calls WeatherKit when the
     /// saved hours are running out or the phone has moved a long way (see `weatherNeedsRefresh`).

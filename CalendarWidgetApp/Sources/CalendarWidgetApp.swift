@@ -1,10 +1,12 @@
 import SwiftUI
+import UIKit
 import BackgroundTasks
 import EventKit
 import WidgetKit
 
 @main
 struct CalendarWidgetApp: App {
+    @UIApplicationDelegateAdaptor(AheadAppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var location = LocationAccess()
     private static let refreshID = "com.ralphgeb.calendarwidgetapp.refresh"

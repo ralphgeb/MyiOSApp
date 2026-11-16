@@ -24,11 +24,9 @@ targets:
       properties:
         CFBundleDisplayName: Ahead
         UILaunchScreen: {}
+        # Portrait on an ordinary iPhone. The app delegate lets the iPhone Duo's big screen turn.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIBackgroundModes:

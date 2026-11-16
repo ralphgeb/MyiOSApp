@@ -22,7 +22,7 @@ struct ContentView: View {
     @State private var paletteTick = 0           // bumped whenever a color changes, so the page redraws
     @State private var pendingReload: Task<Void, Never>?
     @EnvironmentObject private var location: LocationAccess
-    @StateObject private var purchase = Store()
+    @EnvironmentObject private var purchase: Store
     @State private var showPaywall = false
     @State private var resetFlash = false
     @State private var resetTick = 0
@@ -61,7 +61,11 @@ struct ContentView: View {
             weatherSection.listRowBackground(theme.card)
             Section {
             } footer: {
-                Text("To add the widget, touch and hold your Home Screen, tap the add button, then choose Ahead.")
+                Text("To add a widget, touch and hold your Home Screen, tap the add button, then choose Ahead.")
+            }
+            // Only in TestFlight builds (and the simulator); hidden in the App Store download.
+            if Distribution.isTestFlight {
+                testFlightSection.listRowBackground(theme.card)
             }
         }
         .scrollContentBackground(.hidden)
@@ -69,6 +73,41 @@ struct ContentView: View {
         .foregroundStyle(theme.ink)
         .tint(theme.ink)
         .animation(nil, value: paletteTick)     // colors change instantly, no fade
+    }
+
+    /// Tools for testing, at the bottom of Settings in TestFlight only.
+    private var testFlightSection: some View {
+        Section {
+            Button {
+                // Back to the welcome pages; the app comes back after Start.
+                UserDefaults.standard.set(false, forKey: "onboarded")
+            } label: {
+                Label("Show the start screens again", systemImage: "arrow.counterclockwise")
+            }
+            Button(role: .destructive) {
+                purchase.resetToFree()
+                syncColorState()
+                colorRefresh += 1
+            } label: {
+                Label("Reset to free version", systemImage: "lock")
+            }
+            .disabled(!purchase.isPro)
+            if Distribution.isSimulator && !purchase.isPro {
+                Button {
+                    Task {
+                        await purchase.simulatorUnlock()
+                        syncColorState()
+                        colorRefresh += 1
+                    }
+                } label: {
+                    Label("Unlock Ahead Plus (simulator)", systemImage: "lock.open")
+                }
+            }
+        } header: {
+            Text("TestFlight")
+        } footer: {
+            Text("Only in TestFlight builds. Buying or restoring Ahead Plus turns it back on.")
+        }
     }
 
     /// Standard empty state for a missing permission.
@@ -153,13 +192,13 @@ struct ContentView: View {
         Section {
             modePicker
             presetsRow
-            locked(ColorPicker("Background Color", selection: backgroundBinding, supportsOpacity: false))
-            locked(ColorPicker("Text Color", selection: textBinding, supportsOpacity: false))
-            locked(ColorPicker("Highlight Color", selection: highlightBinding, supportsOpacity: false))
-            locked(ColorPicker("Highlighted Date Text", selection: highlightTextBinding, supportsOpacity: false))
+            locked(ColorPicker("Background color", selection: backgroundBinding, supportsOpacity: false))
+            locked(ColorPicker("Text color", selection: textBinding, supportsOpacity: false))
+            locked(ColorPicker("Highlight color", selection: highlightBinding, supportsOpacity: false))
+            locked(ColorPicker("Highlighted date text", selection: highlightTextBinding, supportsOpacity: false))
             locked(ColorPicker("Cards", selection: cardBinding, supportsOpacity: false))
             preview
-            locked(Toggle("Same Colors in Light and Dark", isOn: appearanceBinding)
+            locked(Toggle("Same colors in Light and Dark", isOn: appearanceBinding)
                 .tint(theme.accent)
                 .disabled(!hasCustomColors))
             locked(Button {
@@ -179,7 +218,7 @@ struct ContentView: View {
                     Label("Colors reset", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 } else {
-                    Text("Reset Colors to Default").foregroundStyle(.red)
+                    Text("Reset colors to default").foregroundStyle(.red)
                 }
             }
             .sensoryFeedback(.success, trigger: resetTick))
@@ -194,7 +233,7 @@ struct ContentView: View {
         .id(colorRefresh)
     }
 
-    /// Ready-made looks, same set as the sister app.
+    /// Ready-made looks.
     private var presetsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 14) {
@@ -278,12 +317,12 @@ struct ContentView: View {
 
     private var optionsSection: some View {
         Section {
-            locked(Stepper("Days Shown: \(purchase.isPro ? daysAhead : SharedSettings.freeDays)", value: $daysAhead, in: 1...7)
+            locked(Stepper("Days shown: \(purchase.isPro ? daysAhead : SharedSettings.freeDays)", value: $daysAhead, in: 1...7)
                 .onChange(of: daysAhead) { _, new in
                     SharedSettings.daysAhead = new
                     scheduleWidgetReload()
                 })
-            locked(Toggle("Show All-Day Events", isOn: $showAllDay)
+            locked(Toggle("Show all-day events", isOn: $showAllDay)
                 .tint(theme.accent)
                 .onChange(of: showAllDay) { _, new in
                     SharedSettings.showAllDay = new
@@ -307,13 +346,13 @@ struct ContentView: View {
                 Label("Weather is on", systemImage: "checkmark.circle")
                     .foregroundStyle(.secondary)
             case .denied, .restricted:
-                Button("Open Settings to Allow Location") {
+                Button("Open Settings to allow location") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
             default:
-                Button("Allow Location for Weather") { location.request() }
+                Button("Allow location for weather") { location.request() }
             }
             AppleWeatherAttribution()
         } header: {

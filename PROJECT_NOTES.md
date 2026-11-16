@@ -174,7 +174,15 @@ Permissions are requested after onboarding. `PillButton(title:tick:action:)` is 
 - Rename Minimal → Ahead; Halo/Scout share style but should be differentiated if review keeps flagging spam.
 - Preferences: confirm before destructive/public actions; don't implement when told "question, don't do it"; keep main intact for experiments.
 
-## 12. Open items / next steps
+## 12. iPhone Duo, TestFlight tools and tidy-up (Nov 16)
+
+- iPad removed completely (iPad orientations, extra large widget, two-column widget paging).
+- iPhone Duo support modelled on Halo: Xcode 27 runner, orientation app delegate (big screen turns, ordinary iPhone stays portrait), side-by-side Calendar tab in landscape (still month left with a moving circle, scrolling events right), onboarding kept to a phone's width.
+- TestFlight section in Settings (TestFlight/simulator only): show the start screens again, reset to free version.
+- Simulator build zipped for Appetize.io in the same workflow (release `ios-simulator-latest`); in the simulator Plus is unlocked and a week of sample events is added once.
+- Tidy: sentence-case Settings strings, widget lock messages name Ahead Plus, one Store for the whole app, stale comments fixed.
+
+## 13. Open items / next steps
 
 1. Respond to or resolve the 4.3(a) rejection (Resolution Center reply and/or revised metadata; options include new subtitle/keywords/description and more distinctive screenshots).
 2. Verify the IAP exists, is "Ready to Submit", attached to the version, and rename display name to "Ahead Plus"; confirm Paid Apps Agreement is active.

@@ -1,9 +1,8 @@
 import SwiftUI
 import StoreKit
-import WidgetKit
 
-/// One-time "Unlock" purchase (StoreKit 2). Unlocks the Calendars and Colors settings.
-/// The result is saved in the App Group so the widget knows whether custom settings apply.
+/// The one-time Ahead Plus purchase (StoreKit 2).
+/// The result is saved in the App Group so the widget knows whether Plus applies.
 @MainActor
 final class Store: ObservableObject {
     /// Must match the Product ID created in App Store Connect.
@@ -27,6 +26,14 @@ final class Store: ObservableObject {
 
     deinit { updates?.cancel() }
 
+    /// TestFlight only: "Reset to free version" makes the app act as if Ahead Plus wasn't bought,
+    /// until it is bought or restored again. Never set in an App Store download.
+    private static let forcedFreeKey = "testflight.forcedFree"
+    static var forcedFree: Bool {
+        get { SharedSettings.defaults.bool(forKey: forcedFreeKey) }
+        set { SharedSettings.defaults.set(newValue, forKey: forcedFreeKey) }
+    }
+
     func refresh() async {
         product = try? await Product.products(for: [Self.productID]).first
         var owned = false
@@ -35,7 +42,23 @@ final class Store: ObservableObject {
                 owned = true
             }
         }
+        #if targetEnvironment(simulator)
+        owned = true   // the simulator (Appetize) can't buy: everything is unlocked to look at
+        #endif
+        if Self.forcedFree { owned = false }
         setPro(owned)
+    }
+
+    /// TestFlight: back to the free version, to test what free users see.
+    func resetToFree() {
+        Self.forcedFree = true
+        setPro(false)
+    }
+
+    /// Simulator only: Ahead Plus back on after "Reset to free version".
+    func simulatorUnlock() async {
+        Self.forcedFree = false
+        await refresh()
     }
 
     func buy() async {
@@ -59,6 +82,7 @@ final class Store: ObservableObject {
     func restore() async {
         isBusy = true
         defer { isBusy = false }
+        Self.forcedFree = false
         try? await AppStore.sync()
         await refresh()
         if !isPro { message = "No previous purchase was found for this Apple ID." }
@@ -66,6 +90,7 @@ final class Store: ObservableObject {
 
     private func handle(_ result: VerificationResult<StoreKit.Transaction>) async {
         guard case .verified(let t) = result, t.productID == Self.productID else { return }
+        Self.forcedFree = false
         await t.finish()
         setPro(t.revocationDate == nil)
     }
@@ -74,7 +99,10 @@ final class Store: ObservableObject {
         let changed = SharedSettings.isPro != value
         isPro = value
         SharedSettings.isPro = value
-        if changed { SharedSettings.reloadWidgets() }
+        if changed {
+            SharedSettings.reloadWidgets()
+            NotificationCenter.default.post(name: .colorsChanged, object: nil)   // free and Plus look different
+        }
     }
 }
 
@@ -97,7 +125,7 @@ struct PaywallView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Choose which calendars to show", systemImage: "calendar")
                     Label("All themes, plus your own colors", systemImage: "paintpalette")
-                    Label("Use the medium, extra large and Lock Screen widgets", systemImage: "lock.rectangle")
+                    Label("Use the medium and Lock Screen widgets", systemImage: "lock.rectangle")
                     Label("One payment, yours forever", systemImage: "checkmark.seal")
                 }
                 .font(.body)
@@ -122,9 +150,8 @@ struct PaywallView: View {
                     .controlSize(.large)
                     .disabled(store.isBusy || store.product == nil)
 
-                    Button("Restore Purchase") { Task { await store.restore() } }
+                    Button("Restore purchase") { Task { await store.restore() } }
                         .disabled(store.isBusy)
-
                 }
 
                 if let message = store.message {

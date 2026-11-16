@@ -1,13 +1,31 @@
 name: Build and Upload to TestFlight
 
-# Manual for now: open the Actions tab, pick this workflow, press "Run workflow".
-# Once a run succeeds you can add a `push:` trigger for the main branch.
+# Manual: open the Actions tab, pick this workflow, press "Run workflow".
+# Two jobs run side by side:
+#   testflight  archives, signs and uploads to TestFlight (build number = this run's number)
+#   simulator   builds for the iOS Simulator and publishes Ahead-simulator.zip for Appetize.io:
+#               https://github.com/ralphgeb/MyiOSApp/releases/download/ios-simulator-latest/Ahead-simulator.zip
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: What to build
+        type: choice
+        options: [both, testflight, simulator]
+        default: both
+
+# One run at a time: each run clears the signing certificates CI made, so two at once would clash.
+concurrency:
+  group: ahead-build
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # the simulator job publishes a release
 
 jobs:
   testflight:
-    runs-on: macos-latest
+    if: inputs.target != 'simulator'
+    runs-on: xcode-27   # Xcode 27 (iOS 27 SDK): the iPhone Duo's full screen, as in Halo
     timeout-minutes: 45
     defaults:
       run:
@@ -80,10 +98,15 @@ jobs:
               print("::warning::Certificate cleanup skipped:", e.code, e.read().decode()[:300])
           PY
 
-      - name: Select the newest released Xcode (needed for the iOS 27 full-page widget)
+      - name: Select the newest released Xcode
         run: |
           echo "Installed Xcodes:"; ls -d /Applications/Xcode*.app
-          best=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE "beta|rc|preview" | sort -V | tail -1)
+          best=""; bestv=0
+          for x in $(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE "beta|rc|preview"); do
+            v=$(DEVELOPER_DIR="$x/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1{print $2}')
+            n=$(echo "$v" | awk -F. '{printf "%d%03d%03d", $1, $2, $3}')
+            if [ -n "$v" ] && [ "$n" -gt "$bestv" ]; then best=$x; bestv=$n; fi
+          done
           if [ -n "$best" ]; then sudo xcode-select -s "$best/Contents/Developer"; fi
           xcodebuild -version; swift --version
           echo "::notice::Using $(xcodebuild -version | head -1) / $(swift --version 2>&1 | head -1)"
@@ -157,3 +180,70 @@ jobs:
             grep -iE "error|invalid|failed|already|rejected|missing" build/export.log | sort -u | head -15 | while read -r l; do echo "::error::${l:0:400}"; done
             exit 1
           }
+
+  simulator:
+    if: inputs.target != 'testflight'
+    runs-on: xcode-27
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: CalendarWidgetApp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest released Xcode
+        run: |
+          best=""; bestv=0
+          for x in $(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE "beta|rc|preview"); do
+            v=$(DEVELOPER_DIR="$x/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1{print $2}')
+            n=$(echo "$v" | awk -F. '{printf "%d%03d%03d", $1, $2, $3}')
+            if [ -n "$v" ] && [ "$n" -gt "$bestv" ]; then best=$x; bestv=$n; fi
+          done
+          if [ -n "$best" ]; then sudo xcode-select -s "$best/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Generate Xcode project (XcodeGen)
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project CalendarWidgetApp.xcodeproj \
+            -scheme CalendarWidgetApp \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            2>&1 | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log || {
+            grep -E "error:" build.log | sort -u | head -40 | while IFS= read -r l; do echo "::error::${l:0:400}"; done
+            exit 1
+          }
+
+      - name: Zip the app
+        run: |
+          app=$(ls -d build/Build/Products/Debug-iphonesimulator/*.app | head -1)
+          echo "App: $app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" Ahead-simulator.zip
+          ls -la Ahead-simulator.zip
+
+      - name: Keep the zip with this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ahead-simulator
+          path: CalendarWidgetApp/Ahead-simulator.zip
+
+      - name: Publish the ios-simulator-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-simulator-latest --cleanup-tag --yes || true
+          gh release create ios-simulator-latest Ahead-simulator.zip \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "Ahead for the iOS Simulator (build ${{ github.run_number }})" \
+            --notes "A simulator build of Ahead from commit ${GITHUB_SHA::7}, for Appetize.io or Xcode's simulator. Upload Ahead-simulator.zip to Appetize as an iOS app."

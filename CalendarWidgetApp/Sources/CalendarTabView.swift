@@ -39,14 +39,10 @@ struct CalendarTabView: View {
     }
     private var textColor: Color { colors.text?.color ?? .primary }
 
-    private var highlight: Color {
-        return SharedSettings.effectiveColorSettings.resolved(for: scheme).highlight?.color ?? .orange
-    }
+    private var highlight: Color { colors.highlight?.color ?? .orange }
 
     /// Number inside the highlighted date's circle.
-    private var highlightedDateText: Color {
-        return SharedSettings.effectiveColorSettings.resolved(for: scheme).highlightText?.color ?? .black
-    }
+    private var highlightedDateText: Color { colors.highlightText?.color ?? .black }
 
     /// Finished events are hidden, so the first row is always what's on now or next.
     private var groups: [(day: Date, events: [AppEvent])] {
@@ -61,6 +57,7 @@ struct CalendarTabView: View {
     private func load() {
         status = EKEventStore.authorizationStatus(for: .event)
         guard status == .fullAccess else { events = []; return }
+        SimulatorSamples.seedIfNeeded(store)
         store.refreshSourcesIfNecessary()
         let cal = Calendar.current
         let start = gridStart
@@ -87,7 +84,24 @@ struct CalendarTabView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if status == .fullAccess { list } else { unavailable }
+                if status == .fullAccess {
+                    // The iPhone Duo opened and held sideways: calendar on the left, events on the right.
+                    // Upright (and on every ordinary iPhone) it's the usual folding calendar.
+                    GeometryReader { g in
+                        let side = g.size.width > g.size.height && g.size.width >= 700 && g.size.height >= 380
+                        Group {
+                            if side { sideBySide(size: g.size) } else { list }
+                        }
+                        .onChange(of: side) { _, _ in
+                            // A new scroll view starts at the top: forget the old one's positions.
+                            scrollY = 0
+                            restTop = nil
+                            dayTops = [:]
+                        }
+                    }
+                } else {
+                    unavailable
+                }
             }
             // Same title bar as Settings when access is missing, so both screens line up exactly.
             .navigationTitle("Calendar")
@@ -96,7 +110,7 @@ struct CalendarTabView: View {
         }
         .onAppear { colorTick += 1; load() }
         .onReceive(tick) { now = $0 }
-        .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in colorTick += 1 }
+        .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in colorTick += 1; load() }
         .onReceive(NotificationCenter.default.publisher(for: .weatherUpdated)) { _ in now = Date() }
         .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in load() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { load() } }
@@ -117,37 +131,7 @@ struct CalendarTabView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Color.clear.frame(height: dateHeaderHeight + calendarHeight(scroll: 0))
-                    VStack(alignment: .leading, spacing: 0) {
-                        if all.first.map({ !cal.isDate($0.day, inSameDayAs: now) }) ?? true {
-                            Text(all.isEmpty ? "No upcoming events" : "No more events today")
-                                .font(.system(size: 15.5))
-                                .foregroundStyle(.secondary)
-                                .padding(.bottom, 6)
-                        }
-                        ForEach(Array(all.enumerated()), id: \.element.day) { index, group in
-                            VStack(alignment: .leading, spacing: 0) {
-                                if !cal.isDate(group.day, inSameDayAs: now) {
-                                    if index > 0 {
-                                        Rectangle()
-                                            .fill(textColor.opacity(0.25))
-                                            .frame(height: 1 / displayScale)
-                                            .padding(.vertical, 10)
-                                    }
-                                    Text(group.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                                        .font(.system(size: 15.5, weight: .bold))
-                                        .padding(.bottom, 3)
-                                }
-                                ForEach(group.events) { row($0) }
-                            }
-                            .id(group.day)
-                            .background {
-                                GeometryReader { geo in
-                                    Color.clear.preference(key: DayTopKey.self,
-                                                           value: [group.day: geo.frame(in: .named("dayStack")).minY])
-                                }
-                            }
-                        }
-                    }
+                    eventStack(all)
                     .padding(.horizontal, 15)
                     .padding(.top, 18)
                     .padding(.bottom, 16)
@@ -193,6 +177,189 @@ struct CalendarTabView: View {
             }
             .refreshable { load() }
         }
+    }
+
+    /// The events, day by day. Each day reports where it starts (`DayTopKey`) so the calendar
+    /// knows which day is at the top of the list.
+    private func eventStack(_ all: [(day: Date, events: [AppEvent])]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if all.first.map({ !cal.isDate($0.day, inSameDayAs: now) }) ?? true {
+                Text(all.isEmpty ? "No upcoming events" : "No more events today")
+                    .font(.system(size: 15.5))
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 6)
+            }
+            ForEach(Array(all.enumerated()), id: \.element.day) { index, group in
+                VStack(alignment: .leading, spacing: 0) {
+                    if !cal.isDate(group.day, inSameDayAs: now) {
+                        if index > 0 {
+                            Rectangle()
+                                .fill(textColor.opacity(0.25))
+                                .frame(height: 1 / displayScale)
+                                .padding(.vertical, 10)
+                        }
+                        Text(group.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                            .font(.system(size: 15.5, weight: .bold))
+                            .padding(.bottom, 3)
+                    }
+                    ForEach(group.events) { row($0) }
+                }
+                .id(group.day)
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(key: DayTopKey.self,
+                                               value: [group.day: geo.frame(in: .named("dayStack")).minY])
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Side by side (the iPhone Duo held sideways)
+
+    @Namespace private var circleSpace
+    private let sideTopPad: CGFloat = 14
+
+    /// The calendar stays still on the left; the events scroll on the right, and the circle moves
+    /// to the day at the top of the list.
+    private func sideBySide(size: CGSize) -> some View {
+        let all = groups
+        let leftWidth = min(max(size.width * 0.42, 320), 480)
+        return ScrollViewReader { proxy in
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
+                    monthPanel(groups: all, width: leftWidth, height: size.height - 90) { day in
+                        guard day >= todayStart, let target = all.first(where: { $0.day >= day }) else { return }
+                        withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(target.day, anchor: .top) }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(width: leftWidth)
+                .frame(maxHeight: .infinity, alignment: .top)
+
+                Rectangle().fill(textColor.opacity(0.25)).frame(width: 1 / displayScale)
+                    .ignoresSafeArea(edges: .vertical)
+
+                ScrollView {
+                    eventStack(all)
+                        .padding(.horizontal, 20)
+                        .padding(.top, sideTopPad)
+                        // room to bring the last days up to the top, so the circle can reach them
+                        .padding(.bottom, max(16, size.height * 0.5))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .coordinateSpace(name: "dayStack")
+                        .onPreferenceChange(DayTopKey.self) { dayTops = $0 }
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear.preference(key: ScrollTopKey.self, value: geo.frame(in: .named("scrollArea")).minY)
+                            }
+                        }
+                }
+                .coordinateSpace(name: "scrollArea")
+                .modifier(ScrollTracker(y: $scrollY))
+                .onPreferenceChange(ScrollTopKey.self) { v in
+                    if #unavailable(iOS 18) {
+                        if restTop == nil { restTop = v }
+                        scrollY = (restTop ?? v) - v
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .refreshable { load() }
+            }
+            .foregroundStyle(textColor)
+            .background { pageBackground.ignoresSafeArea() }
+        }
+    }
+
+    /// The day whose events are at the top of the side list.
+    private func sideCurrent(_ groups: [(day: Date, events: [AppEvent])]) -> Int {
+        let s = max(scrollY, 0)
+        let pts = groups.compactMap { g -> (y: CGFloat, d: Int)? in
+            guard let y = dayTops[g.day] else { return nil }
+            return (y, dayIndex(g.day))
+        }.sorted { $0.y < $1.y }
+        let todayIdx = dayIndex(todayStart)
+        guard let first = pts.first else { return todayIdx }
+        return pts.last(where: { $0.y <= s + sideTopPad + 4 })?.d ?? first.d
+    }
+
+    /// A still month (and the days after it that the list reaches), with a circle on the day in view.
+    private func monthPanel(groups: [(day: Date, events: [AppEvent])], width: CGFloat, height: CGFloat,
+                            jump: @escaping (Date) -> Void) -> some View {
+        let total = totalDays
+        let rows = total / 7
+        let cw = (width - 30) / 7
+        let rh = min(54, max(38, (height - 70) / CGFloat(max(rows, 1))))
+        let current = sideCurrent(groups)
+        let todayIdx = dayIndex(todayStart)
+        let counts = eventCounts
+        let days: [Date] = (0..<total).map { cal.date(byAdding: .day, value: $0, to: gridStart) ?? gridStart }
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(monthStart.formatted(.dateTime.month(.wide).year()))
+                .font(.system(size: 15.5, weight: .semibold))
+                .padding(.horizontal, 15)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { k in
+                    Text(days[k].formatted(.dateTime.weekday(.narrow)))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(textColor.opacity(0.5))
+                        .frame(width: cw, height: letterH)
+                }
+            }
+            .padding(.horizontal, 15)
+            VStack(spacing: 0) {
+                ForEach(0..<rows, id: \.self) { r in
+                    HStack(spacing: 0) {
+                        ForEach(0..<7, id: \.self) { k in
+                            let i = r * 7 + k
+                            dayCell(days[i], isCurrent: i == current, isToday: i == todayIdx, isPast: i < todayIdx,
+                                    dots: min(counts[days[i]] ?? 0, 3), width: cw, height: rh, size: 30, matched: true,
+                                    jump: jump)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 15)
+            .animation(.snappy(duration: 0.3), value: current)
+        }
+    }
+
+    /// Upcoming events per day, for the dots under each date.
+    private var eventCounts: [Date: Int] {
+        Dictionary(grouping: events.filter { $0.end > now }) { cal.startOfDay(for: $0.start) }.mapValues { $0.count }
+    }
+
+    /// One date in a calendar: the number, the circle when it's the day in view, and up to three dots.
+    private func dayCell(_ day: Date, isCurrent: Bool, isToday: Bool, isPast: Bool, dots n: Int,
+                         width: CGFloat, height: CGFloat, size: CGFloat, matched: Bool = false,
+                         jump: @escaping (Date) -> Void) -> some View {
+        VStack(spacing: 5) {
+            ZStack {
+                if isCurrent {
+                    if matched {
+                        Circle().fill(highlight).matchedGeometryEffect(id: "current", in: circleSpace)
+                    } else {
+                        Circle().fill(highlight)
+                    }
+                }
+                Text(day.formatted(.dateTime.day()))
+                    .font(.system(size: size > 26 ? 16 : 14.5, weight: isCurrent || isToday ? .bold : .regular))
+                    .foregroundStyle(isCurrent ? highlightedDateText : (isToday ? highlight : textColor.opacity(0.5)))
+            }
+            .frame(width: size, height: size)
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { k in
+                    Circle().fill(k < n ? textColor.opacity(0.7) : .clear).frame(width: 4, height: 4)
+                }
+            }
+        }
+        .frame(width: width, height: height)
+        .opacity(isPast ? 0.6 : 1)
+        .contentShape(Rectangle())
+        .onTapGesture { jump(day) }
     }
 
     // MARK: Calendar (month that folds into a week strip)
@@ -267,31 +434,12 @@ struct CalendarTabView: View {
         // The month folds first (days stay in their columns). After that the orange day moves right
         // across the week, and once it reaches the last column the days slide to keep it in view.
         let ws = max(0, min(max(rowStart, min(p - 6, CGFloat(current))), CGFloat(total - 7)))
-        let upcoming = events.filter { $0.end > now }
-        let counts = Dictionary(grouping: upcoming) { cal.startOfDay(for: $0.start) }.mapValues { $0.count }
+        let counts = eventCounts
         let days: [Date] = (0..<total).map { cal.date(byAdding: .day, value: $0, to: gridStart) ?? gridStart }
 
         func cell(_ i: Int, width: CGFloat) -> some View {
-            let isCurrent = i == current
-            let n = min(counts[days[i]] ?? 0, 3)
-            return VStack(spacing: 5) {
-                ZStack {
-                    if isCurrent { Circle().fill(highlight) }
-                    Text(days[i].formatted(.dateTime.day()))
-                        .font(.system(size: 14.5, weight: isCurrent || i == todayIdx ? .bold : .regular))
-                        .foregroundStyle(isCurrent ? highlightedDateText : (i == todayIdx ? highlight : textColor.opacity(0.5)))
-                }
-                .frame(width: circle, height: circle)
-                HStack(spacing: 3) {
-                    ForEach(0..<3, id: \.self) { k in
-                        Circle().fill(k < n ? textColor.opacity(0.7) : .clear).frame(width: 4, height: 4)
-                    }
-                }
-            }
-            .frame(width: width, height: rowH)
-            .opacity(i < current ? 0.6 : 1)
-            .contentShape(Rectangle())
-            .onTapGesture { jump(days[i]) }
+            dayCell(days[i], isCurrent: i == current, isToday: i == todayIdx, isPast: i < current,
+                    dots: min(counts[days[i]] ?? 0, 3), width: width, height: rowH, size: circle, jump: jump)
         }
 
         return GeometryReader { geo in
@@ -411,6 +559,7 @@ struct RootView: View {
     @EnvironmentObject private var location: LocationAccess
     @Environment(\.colorScheme) private var scheme
     @State private var themeTick = 0
+    @StateObject private var purchase = Store()      // one for the whole app, so Plus is known on every tab
     @AppStorage("onboarded") private var onboarded = false
 
     var body: some View {
@@ -430,6 +579,15 @@ struct RootView: View {
                     .transition(.opacity)
             }
         }
+        .environmentObject(purchase)
+        // The iPhone Duo folding or opening: only the big screen may turn sideways.
+        .background {
+            GeometryReader { g in
+                Color.clear.onChange(of: min(g.size.width, g.size.height) >= 560) { _, _ in
+                    AheadAppDelegate.refreshOrientations()
+                }
+            }
+        }
         // The selected tab uses your main color (not system blue), like the sister app.
         .tint({ _ = themeTick; return AppTheme(scheme: SharedSettings.appearanceMode.scheme ?? scheme).ink }())
         .preferredColorScheme({ _ = themeTick; return SharedSettings.appearanceMode.scheme }())
@@ -444,6 +602,7 @@ struct RootView: View {
             _ = try? await store.requestFullAccessToEvents()
             SharedSettings.reloadWidgets()
         }
+        SimulatorSamples.seedIfNeeded(store)
         if location.status == .notDetermined {
             location.request()
         }
@@ -468,12 +627,12 @@ struct CalendarAccessNeededView: View {
     var body: some View {
         let theme = AppTheme(scheme: scheme)
         ContentUnavailableView {
-            Label("Calendar Access Needed", systemImage: "calendar.badge.exclamationmark")
+            Label("Calendar access needed", systemImage: "calendar.badge.exclamationmark")
         } description: {
             Text("Ahead needs access to your calendar to show your events.")
         } actions: {
             if status == .notDetermined {
-                Button("Allow Calendar Access") {
+                Button("Allow calendar access") {
                     Task {
                         let started = Date()
                         await onAllow()

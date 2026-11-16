@@ -10,7 +10,7 @@ Project guide for future sessions. Full history and rationale: `PROJECT_NOTES.md
 - App Group: `group.com.ralphgeb.calendarwidgetapp` (app ↔ widget share UserDefaults)
 - IAP (non-consumable, £1.99): `com.ralphgeb.calendarwidgetapp.unlock`, branded **Ahead Plus**
 - Sister apps (same owner/workflow): Halo (`ralphgeb/FridgeCheck`, `HaloApp`), Scout (`ralphgeb/ScoutAI`)
-- Targets: iOS 17+ deployment, iPhone only (`TARGETED_DEVICE_FAMILY: "1"`), Swift 5 mode, Xcode 26.x on `macos-latest`
+- Targets: iOS 17+ deployment, iPhone only (`TARGETED_DEVICE_FAMILY: "1"`, no iPad anything), Swift 5 mode, Xcode 27 on the `xcode-27` runner (same as Halo)
 
 ## Layout
 ```
@@ -18,7 +18,8 @@ Project guide for future sessions. Full history and rationale: `PROJECT_NOTES.md
 CalendarWidgetApp/
   project.yml                     XcodeGen spec (edit this, never a .xcodeproj)
   Sources/   app: CalendarWidgetApp.swift, CalendarTabView.swift, ContentView.swift (Settings),
-             Store.swift (StoreKit 2 + paywall), Look.swift (AppTheme), Onboarding.swift
+             Store.swift (StoreKit 2 + paywall), Look.swift (AppTheme), Onboarding.swift,
+             Duo.swift (Distribution.isTestFlight, orientation app delegate, simulator sample events)
   Shared/    compiled into BOTH targets: SharedSettings.swift, Presets.swift, Weather*.swift
   Widget/    CalendarWidget.swift, PageIntent.swift (paging), Weather.swift (widget-side fetch)
 docs/ + root index/privacy/support.html   PUBLIC GitHub Pages (never put notes/secrets here)
@@ -32,6 +33,7 @@ CLAUDE.md, PROJECT_NOTES.md       internal docs (repo root, not in docs/)
 4. Tell the user the **TestFlight build number = run number** of build-ios.yml. If the upload could not be verified, say so plainly — never claim "uploaded" without evidence.
 5. Concurrent uploads can fail with a "buildUpload relationship" error → wait and retry.
 6. Experiments go on a branch (e.g. `glass`), keep `main` intact.
+7. The same run also builds for the simulator and publishes `Ahead-simulator.zip` (release `ios-simulator-latest`) for Appetize.io. Input `target`: both / testflight / simulator.
 
 The workflow deletes old Apple Development certificates via the App Store Connect API before each build (continue-on-error) so Apple's certificate limit never blocks CI. Secrets: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`, `APPLE_TEAM_ID`. Never print or commit them.
 
@@ -50,6 +52,8 @@ The workflow deletes old Apple Development certificates via the App Store Connec
 - **Weather (WeatherKit) cost design:** one hourly call → 24 stored hours (`WeatherForecast`); widget picks the icon per timeline entry with `SharedSettings.weather(at:)`. Refresh rules in `weatherNeedsRefresh`: 15-min throttle; refresh if none / <4h covered / moved >10 km; skip 23:00–06:00 while >1h covered; widget location check ≤ every 2h; fetch has timeouts (location 3s, whole refresh 5s).
 - **Calendar tab:** pinned overlay header over a ScrollView with an equal-height spacer; month grid folds as the list scrolls (today's row pins); `dayTops` via PreferenceKey; scroll offset via `onScrollGeometryChange` (iOS 18) with `#available` + preference fallback; orange circle follows the first-seen day; dots = upcoming events (max 3).
 - iOS 18/27 APIs must be availability-gated (deployment target is 17). `systemExtraLargePortrait` is behind `#if compiler(>=6.4)`.
+- **iPhone Duo:** the app delegate allows rotation only on a big screen (short side ≥ 560 pt), portrait elsewhere; `refreshOrientations()` runs when the screen folds/opens. Calendar tab: landscape + wide (≥700 pt) → still month on the left, scrolling events on the right, circle follows the day at the top; upright → the normal folding calendar. Onboarding pages max 560 pt wide.
+- **TestFlight vs App Store:** one build; `Distribution.isTestFlight` (sandbox receipt, or DEBUG/simulator) shows the TestFlight section at the bottom of Settings: show the start screens again, reset to free version (`Store.forcedFree`, cleared by buying/restoring). Simulator: Plus unlocked and sample events added once.
 - Permissions are requested **after** onboarding (`.task(id: onboarded)`), calendar = full access.
 
 ## Pitfalls we hit
