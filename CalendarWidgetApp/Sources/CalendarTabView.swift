@@ -27,6 +27,7 @@ struct CalendarTabView: View {
     @State private var dateHeaderHeight: CGFloat = 70
     @State private var restTop: CGFloat?
     @State private var dayTops: [Date: CGFloat] = [:]    // where each day starts in the list
+    @State private var topExtra: CGFloat = 0             // wider top margin where no status bar runs across the top
 
     // MARK: Data
 
@@ -89,6 +90,9 @@ struct CalendarTabView: View {
                     // Upright (and on every ordinary iPhone) it's the usual folding calendar.
                     GeometryReader { g in
                         let side = g.size.width > g.size.height && g.size.width >= 700 && g.size.height >= 380
+                        // No status bar across the top (the Duo's outside screen, or held sideways):
+                        // the page would start right at the edge, so it gets a wider top margin.
+                        let extra: CGFloat = g.safeAreaInsets.top < 30 ? 14 : 0
                         Group {
                             if side { sideBySide(size: g.size) } else { list }
                         }
@@ -98,6 +102,8 @@ struct CalendarTabView: View {
                             restTop = nil
                             dayTops = [:]
                         }
+                        .onAppear { topExtra = extra }
+                        .onChange(of: extra) { _, v in topExtra = v }
                     }
                 } else {
                     unavailable
@@ -218,7 +224,7 @@ struct CalendarTabView: View {
     // MARK: Side by side (the iPhone Duo held sideways)
 
     @Namespace private var circleSpace
-    private let sideTopPad: CGFloat = 14
+    private var sideTopPad: CGFloat { 14 + topExtra }
 
     /// The calendar stays still on the left; the events scroll on the right, and the circle moves
     /// to the day at the top of the list.
@@ -514,7 +520,7 @@ struct CalendarTabView: View {
         }
         .foregroundStyle(textColor)
         .padding(.horizontal, 15)
-        .padding(.top, 6)
+        .padding(.top, 6 + topExtra)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(pageBackground)
@@ -523,6 +529,12 @@ struct CalendarTabView: View {
     private func clock(_ d: Date) -> String {
         d.formatted(Date.FormatStyle().hour().minute())
     }
+
+    /// Room for the time: "9:00 AM" needs more than "09:00".
+    private static let timeWidth: CGFloat = {
+        let format = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current) ?? ""
+        return format.contains("a") ? 62 : 44
+    }()
 
     private func row(_ e: AppEvent) -> some View {
         let active = !e.isAllDay && e.start <= now && e.end > now
@@ -535,7 +547,9 @@ struct CalendarTabView: View {
             }
             .fontWidth(.condensed)
             .monospacedDigit()
-            .frame(width: 44, alignment: .leading)
+            .lineLimit(1)                 // a time never breaks onto a second line
+            .minimumScaleFactor(0.8)
+            .frame(width: Self.timeWidth, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(e.title)

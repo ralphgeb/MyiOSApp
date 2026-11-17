@@ -344,6 +344,8 @@ struct CalendarWidgetView: View {
                     Text(e.isAllDay ? "All day" : "\(clock(e.start))–\(clock(e.end))")
                         .font(.system(size: 14, weight: .bold))
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     Text(e.title)
                         .font(.system(size: 14, weight: .medium))
                         .lineLimit(2)
