@@ -46,6 +46,7 @@ The workflow deletes old Apple Development certificates via the App Store Connec
 
 ## Architecture patterns
 - **All cross-process state lives in `SharedSettings`** (App Group UserDefaults). Any change that affects widgets must call `SharedSettings.reloadWidgets()`; app redraws use the `.colorsChanged` notification.
+- **Widget look:** `reloadWidgets()` first writes `look.json` (colors, appearance mode, isPro) to the App Group container and the widget reads it from there (UserDefaults could reach the widget late → old colors), then reloads twice (now and +1.2 s). Light/Dark/Automatic in the app is set with `InterfaceStyle.apply()` on the windows, not `preferredColorScheme` (it stuck after going back to Automatic).
 - **Colors:** `RGBA` (opacity always 1) → `ColorSet {background,text,highlight,highlightText,card}` → `ColorSettings.resolved(for: scheme)`. Widgets read `SharedSettings.effectiveColorSettings` (Plus → user colors; free → the chosen preset). Presets in `Shared/Presets.swift` (`LookPreset`: Graphite, Ocean, Forest, Mono, Dusk, Sand, Sky, Blush; Sky/Blush are light in both modes). Editing a color sets `presetID = "custom"`.
 - **App chrome** themed by `AppTheme` (`Sources/Look.swift`); `AppearanceMode` applied via `preferredColorScheme`. Toggles use `.tint(theme.accent)`; never tint with ink (white-on-white bugs).
 - **Widgets can't scroll:** per-family paging in the App Group (`Pager`, `PageIntent`), reset on resize or 15 min idle; page change via `.id(pageIndex)` + `.transition(.push)`. Events are chunked by measured height (`Cost`).
@@ -73,4 +74,4 @@ The workflow deletes old Apple Development certificates via the App Store Connec
 - **App Review 1.0 rejected under Guideline 4.3(a) (spam)**, submission `7bc39548-98fd-4528-9127-45245b1bfb9f`; name was "Ahead: Simple calendar widgets". Needs a Resolution Center reply and/or differentiated name/subtitle/screenshots/description.
 - Confirm the IAP product exists/active in App Store Connect (Paid Apps Agreement) and rename its display name to "Ahead Plus".
 - Enable GitHub Pages (Settings → Pages → main) so privacy/support URLs resolve: `https://ralphgeb.github.io/MyiOSApp/privacy.html`, `/support.html`.
-- Latest TestFlight build: **84** (commit b942e17).
+- Latest TestFlight build: **88** (branch `claude/laughing-allen-f2cvag`, commit be21ac2). Appetize: https://appetize.io/app/rvxaazcudw7zvlgfy3cdzmb4m4
