@@ -604,8 +604,11 @@ struct RootView: View {
         }
         // The selected tab uses your main color (not system blue), like the sister app.
         .tint({ _ = themeTick; return AppTheme(scheme: SharedSettings.appearanceMode.scheme ?? scheme).ink }())
-        .preferredColorScheme({ _ = themeTick; return SharedSettings.appearanceMode.scheme }())
-        .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in themeTick += 1 }
+        .onAppear { InterfaceStyle.apply() }
+        .onReceive(NotificationCenter.default.publisher(for: .colorsChanged)) { _ in
+            InterfaceStyle.apply()
+            themeTick += 1
+        }
         // The calendar and location questions come right after the welcome pages.
         .task(id: onboarded) { if onboarded { await askForPermissions() } }
     }

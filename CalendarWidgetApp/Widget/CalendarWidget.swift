@@ -54,6 +54,7 @@ struct CalendarEntry: TimelineEntry {
     let direction: Int                          // +1 slid down, -1 slid up (for the page animation)
     let weatherIcon: String?                    // custom icon name, nil = no weather yet
     let colors: SharedSettings.ColorSettings    // resolved for light/dark when drawing
+    let mode: SharedSettings.AppearanceMode     // Automatic follows the iPhone; Light or Dark is fixed
     let isPro: Bool                             // unlocked? (previews in the gallery always show content)
 }
 
@@ -111,13 +112,15 @@ struct Provider: TimelineProvider {
     private func makeEntry(date: Date, events: [CalEvent], weather: SharedSettings.WeatherSnapshot?,
                            preview: Bool = false,
                            family: WidgetFamily) -> CalendarEntry {
-        CalendarEntry(date: date,
+        let look = SharedSettings.look
+        return CalendarEntry(date: date,
                       events: events,
                       page: Pager.page(for: family),
                       direction: Pager.direction,
                       weatherIcon: weather?.iconName,
-                      colors: SharedSettings.effectiveColorSettings,
-                      isPro: preview || SharedSettings.isPro)
+                      colors: look.colors,
+                      mode: look.mode,
+                      isPro: preview || look.isPro)
     }
 
     private func fetchEvents() -> [CalEvent] {
@@ -163,7 +166,7 @@ struct CalendarWidgetView: View {
 
     // MARK: Colors (custom colors, or the system defaults)
 
-    private var colorSet: SharedSettings.ColorSet { entry.colors.resolved(for: SharedSettings.appearanceMode.scheme ?? scheme) }
+    private var colorSet: SharedSettings.ColorSet { entry.colors.resolved(for: entry.mode.scheme ?? scheme) }
     private var textColor: Color { colorSet.text?.color ?? .primary }
     private var highlightColor: Color { colorSet.highlight?.color ?? .orange }
     private var backgroundColor: Color { colorSet.background?.color ?? .clear }

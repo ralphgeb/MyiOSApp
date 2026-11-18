@@ -34,6 +34,24 @@ struct AppTheme {
     }
 }
 
+/// Light, Dark or Automatic for the whole app, set on its windows. (SwiftUI's preferredColorScheme
+/// often stays stuck on Dark or Light after going back to nil, so Automatic didn't follow the iPhone.)
+@MainActor enum InterfaceStyle {
+    static func apply() {
+        let style: UIUserInterfaceStyle
+        switch SharedSettings.appearanceMode {
+        case .automatic: style = .unspecified
+        case .light: style = .light
+        case .dark: style = .dark
+        }
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for window in scene.windows where window.overrideUserInterfaceStyle != style {
+                window.overrideUserInterfaceStyle = style
+            }
+        }
+    }
+}
+
 extension Notification.Name {
     static let colorsChanged = Notification.Name("colorsChanged")
 }

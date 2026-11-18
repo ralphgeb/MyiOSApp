@@ -36,9 +36,50 @@ enum SharedSettings {
     static let freeDays = 3
 
     /// Refresh every widget this app offers (battery: only these two kinds, never "all").
+    /// The look is written to a file first: the widget reads that file, which is up to date the
+    /// moment it's written (settings can reach the widget a moment late, so it drew the old colors).
+    /// A second refresh a second later catches any widget that was mid-draw.
     static func reloadWidgets() {
+        saveLook()
         WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
         WidgetCenter.shared.reloadTimelines(ofKind: nextEventKind)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
+            WidgetCenter.shared.reloadTimelines(ofKind: nextEventKind)
+        }
+    }
+
+    // MARK: The look, as the widget draws it
+
+    /// Everything that decides how a widget looks, saved together in one file.
+    struct WidgetLook: Codable {
+        var colors: ColorSettings
+        var mode: AppearanceMode
+        var isPro: Bool
+    }
+
+    private static var lookURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
+            .appendingPathComponent("look.json")
+    }
+
+    /// The look right now, from the settings.
+    static var currentLook: WidgetLook {
+        WidgetLook(colors: effectiveColorSettings, mode: appearanceMode, isPro: isPro)
+    }
+
+    static func saveLook() {
+        guard let url = lookURL, let data = try? JSONEncoder().encode(currentLook) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    /// What the widget draws with: the saved file, or the settings if there's no file yet.
+    static var look: WidgetLook {
+        if let url = lookURL, let data = try? Data(contentsOf: url),
+           let saved = try? JSONDecoder().decode(WidgetLook.self, from: data) {
+            return saved
+        }
+        return currentLook
     }
 
     static var defaults: UserDefaults {
@@ -106,7 +147,7 @@ enum SharedSettings {
     /// Everything the widget needs to pick its colors.
     /// When `ignoreAppearance` is on, one set (`both`) is used in Light and Dark mode.
     /// When it's off, Light and Dark mode each keep their own set.
-    struct ColorSettings {
+    struct ColorSettings: Codable {
         var ignoreAppearance: Bool
         var both: ColorSet
         var light: ColorSet
@@ -160,7 +201,7 @@ enum SharedSettings {
     }
 
     /// Light / Dark / follow the iPhone.
-    enum AppearanceMode: String, CaseIterable, Identifiable {
+    enum AppearanceMode: String, CaseIterable, Identifiable, Codable {
         case automatic, light, dark
         var id: String { rawValue }
         var title: String {
