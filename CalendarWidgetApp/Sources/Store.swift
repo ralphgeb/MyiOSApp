@@ -123,13 +123,17 @@ final class Store: ObservableObject {
 struct PaywallView: View {
     @ObservedObject var store: Store
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        // Drawn in the app's own colors: the button is the accent color with its own text color,
+        // never the inherited tint (that made it white on white in Dark mode).
+        let theme = AppTheme(scheme: scheme)
         NavigationStack {
             VStack(spacing: 22) {
                 Image(systemName: "lock.open.fill")
                     .font(.system(size: 44))
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(theme.accent)
                     .padding(.top, 24)
 
                 Text("Ahead Plus")
@@ -154,17 +158,22 @@ struct PaywallView: View {
                         Task { await store.buy() }
                     } label: {
                         Group {
-                            if store.isBusy { ProgressView() }
+                            if store.isBusy { ProgressView().tint(theme.accentText) }
                             else if let price = store.product?.displayPrice { Text("Get Ahead Plus for \(price)") }
                             else { Text("Get Ahead Plus") }
                         }
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(theme.accentText)
                         .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(theme.accent, in: Capsule())
+                        .contentShape(Capsule())
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(.plain)
                     .disabled(store.isBusy)
 
                     Button("Restore purchase") { Task { await store.restore() } }
+                        .foregroundStyle(theme.ink)
                         .disabled(store.isBusy)
                 }
 
@@ -175,13 +184,17 @@ struct PaywallView: View {
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 16)
+            .foregroundStyle(theme.ink)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(theme.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { dismiss() }.foregroundStyle(theme.ink)
                 }
             }
         }
+        .tint(theme.accent)
         .presentationDetents([.medium, .large])
         .task { await store.refresh() }
     }

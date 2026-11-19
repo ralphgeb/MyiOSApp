@@ -11,7 +11,7 @@ on:
       target:
         description: What to build
         type: choice
-        options: [both, testflight, simulator, iap-check]
+        options: [both, testflight, simulator, iap-check, iap-rename]
         default: both
 
 # One run at a time: each run clears the signing certificates CI made, so two at once would clash.
@@ -36,6 +36,20 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: python3 tools/asc_iap_check.py
+
+  iap-rename:
+    # Names the in-app purchase "Ahead Plus" in App Store Connect and prints its UK and US prices.
+    if: inputs.target == 'iap-rename'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install --quiet "pyjwt[crypto]" requests
+      - name: Rename to Ahead Plus
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: python3 tools/asc_iap_rename.py
 
   testflight:
     if: inputs.target == 'both' || inputs.target == 'testflight'

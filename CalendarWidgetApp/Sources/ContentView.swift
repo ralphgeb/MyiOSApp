@@ -137,7 +137,7 @@ struct ContentView: View {
                 }
             }
         } footer: {
-            if !purchase.isPro { Text("One payment unlocks the medium, extra large and Lock Screen widgets, all themes and all settings.") }
+            if !purchase.isPro { Text("One payment unlocks the medium and Lock Screen widgets, all themes and all settings.") }
         }
     }
 
