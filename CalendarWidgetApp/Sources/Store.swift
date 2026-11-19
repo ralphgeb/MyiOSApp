@@ -34,8 +34,18 @@ final class Store: ObservableObject {
         set { SharedSettings.defaults.set(newValue, forKey: forcedFreeKey) }
     }
 
+    /// Loads Ahead Plus from the App Store, trying a few times (the first request can fail on a
+    /// slow or just-woken connection).
+    func loadProduct() async {
+        for attempt in 0..<3 {
+            if product != nil { return }
+            if attempt > 0 { try? await Task.sleep(for: .seconds(1.5)) }
+            product = try? await Product.products(for: [Self.productID]).first
+        }
+    }
+
     func refresh() async {
-        product = try? await Product.products(for: [Self.productID]).first
+        await loadProduct()
         var owned = false
         for await result in StoreKit.Transaction.currentEntitlements {
             if case .verified(let t) = result, t.productID == Self.productID, t.revocationDate == nil {
@@ -62,12 +72,15 @@ final class Store: ObservableObject {
     }
 
     func buy() async {
-        guard let product else {
-            message = "The purchase isn't available right now. Please try again later."
-            return
-        }
         isBusy = true
         defer { isBusy = false }
+        message = nil
+        // The button always works: if Ahead Plus hasn't loaded yet, try again now.
+        await loadProduct()
+        guard let product else {
+            message = "Ahead Plus couldn't be loaded from the App Store. Check your internet connection and try again."
+            return
+        }
         do {
             switch try await product.purchase() {
             case .success(let result): await handle(result)
@@ -142,13 +155,14 @@ struct PaywallView: View {
                     } label: {
                         Group {
                             if store.isBusy { ProgressView() }
-                            else { Text("Get Ahead Plus for \(store.product?.displayPrice ?? "£1.99")") }
+                            else if let price = store.product?.displayPrice { Text("Get Ahead Plus for \(price)") }
+                            else { Text("Get Ahead Plus") }
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(store.isBusy || store.product == nil)
+                    .disabled(store.isBusy)
 
                     Button("Restore purchase") { Task { await store.restore() } }
                         .disabled(store.isBusy)

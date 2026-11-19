@@ -132,7 +132,7 @@ struct ContentView: View {
                     HStack {
                         Label("Get Ahead Plus", systemImage: "lock.open")
                         Spacer()
-                        Text(purchase.product?.displayPrice ?? "£1.99").foregroundStyle(.secondary)
+                        if let price = purchase.product?.displayPrice { Text(price).foregroundStyle(.secondary) }
                     }
                 }
             }
