@@ -74,4 +74,4 @@ The workflow deletes old Apple Development certificates via the App Store Connec
 - **App Review 1.0 rejected under Guideline 4.3(a) (spam)**, submission `7bc39548-98fd-4528-9127-45245b1bfb9f`; name was "Ahead: Simple calendar widgets". Needs a Resolution Center reply and/or differentiated name/subtitle/screenshots/description.
 - Confirm the IAP product exists/active in App Store Connect (Paid Apps Agreement) and rename its display name to "Ahead Plus".
 - Enable GitHub Pages (Settings → Pages → main) so privacy/support URLs resolve: `https://ralphgeb.github.io/MyiOSApp/privacy.html`, `/support.html`.
-- Latest TestFlight build: **88** (branch `claude/laughing-allen-f2cvag`, commit be21ac2). Appetize: https://appetize.io/app/rvxaazcudw7zvlgfy3cdzmb4m4
+- Latest TestFlight build: **91** (branch `claude/laughing-allen-f2cvag`). App Review 2.1(b): Plus button was grey (product didn't load). Button now always works; IAP config checked READY_TO_SUBMIT via `target: iap-check`. Appetize: https://appetize.io/app/rvxaazcudw7zvlgfy3cdzmb4m4
