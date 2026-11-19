@@ -84,8 +84,12 @@ def main():
 
     avail, err = get(f"/v2/inAppPurchases/{iid}/inAppPurchaseAvailability?include=availableTerritories")
     if avail:
-        n = len(avail["data"].get("relationships", {}).get("availableTerritories", {}).get("data", []) or [])
-        print(f"  availability: {n} territories listed, new territories {avail['data']['attributes'].get('availableInNewTerritories')}")
+        terr, _ = get(f"/v1/inAppPurchaseAvailabilities/{avail['data']['id']}/availableTerritories?limit=200")
+        ids = sorted(t["id"] for t in (terr or {}).get("data", []))
+        print(f"  availability: {len(ids)} territories: {', '.join(ids)}; new territories {avail['data']['attributes'].get('availableInNewTerritories')}")
+        if "USA" not in ids:
+            print("::warning::Ahead Plus isn't available in the United States, where App Review usually buys from.")
+
     else:
         print(f"  availability: {err}")
         print("::warning::No availability set (or couldn't read it).")
