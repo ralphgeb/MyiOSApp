@@ -31,7 +31,7 @@ def call(method, path, body=None):
                          headers={"Authorization": f"Bearer {token()}"}, timeout=60)
     if r.status_code not in (200, 201, 204):
         errs = "; ".join(f"{e.get('title')}: {e.get('detail')}" for e in r.json().get("errors", [])) if r.text else ""
-        raise SystemExit(f"::error::{method} {path} -> {r.status_code} {errs}")
+        raise RuntimeError(f"{method} {path} -> {r.status_code} {errs}")
     return r.json() if r.text else {}
 
 
@@ -50,6 +50,7 @@ def main():
     # the name and description customers see
     locs = {l["attributes"]["locale"]: l for l in call("GET", f"/v2/inAppPurchases/{iid}/inAppPurchaseLocalizations")["data"]}
     for locale, desc in DESCRIPTIONS.items():
+      try:
         if locale in locs:
             call("PATCH", f"/v1/inAppPurchaseLocalizations/{locs[locale]['id']}",
                  {"data": {"type": "inAppPurchaseLocalizations", "id": locs[locale]["id"],
@@ -61,6 +62,8 @@ def main():
                            "attributes": {"locale": locale, "name": NAME, "description": desc},
                            "relationships": {"inAppPurchaseV2": {"data": {"type": "inAppPurchases", "id": iid}}}}})
             print(f"{locale}: added '{NAME}' / '{desc}'")
+      except RuntimeError as e:
+        print(f"::warning::{locale}: couldn't change it now ({e})")
 
     # what it costs
     for kind in ("manualPrices", "automaticPrices"):
